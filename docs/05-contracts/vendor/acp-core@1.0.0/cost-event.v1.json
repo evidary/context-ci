@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.example.invalid/acp-core/cost-event.v1.json",
+  "title": "Cost Event v1",
+  "description": "Normalised record of one metered unit of agent work. Published by acp-core; consumed by FinOps and any module that meters usage.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "run_id",
+    "agent_id",
+    "provider",
+    "model",
+    "tokens_in",
+    "tokens_out",
+    "outcome",
+    "cost_usd",
+    "timestamp"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "task_id": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "agent_id": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "provider": {
+      "enum": [
+        "openai",
+        "anthropic",
+        "google",
+        "other"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "tokens_in": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tokens_out": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tokens_cached": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "duration_ms"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cost_usd": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "sandbox_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "human_review_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "outcome": {
+      "enum": [
+        "success",
+        "failure",
+        "unknown"
+      ]
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "type": "object",
+      "maxProperties": 50,
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 500
+      }
+    }
+  }
+}

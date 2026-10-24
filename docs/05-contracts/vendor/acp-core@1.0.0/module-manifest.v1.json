@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.example.invalid/acp-core/module-manifest.v1.json",
+  "title": "Module Manifest v1",
+  "description": "What a module declares to the platform: identity, entitlements, the contracts it consumes and publishes, and its health endpoint.",
+  "type": "object",
+  "required": [
+    "module_id",
+    "display_name",
+    "version",
+    "licence",
+    "contracts_consumed",
+    "contracts_published",
+    "entitlements",
+    "health_path"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "module_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,40}$"
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "licence": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "contracts_consumed": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          }
+        }
+      }
+    },
+    "contracts_published": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "schema_path": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "entitlements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      }
+    },
+    "health_path": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "public_base_url": {
+      "type": "string",
+      "format": "uri"
+    }
+  }
+}
