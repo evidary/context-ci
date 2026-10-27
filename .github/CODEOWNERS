@@ -1,0 +1,20 @@
+# Code owners for context-ci
+
+```
+*                                   @context-ci/maintainers
+docs/01-thesis.md                   @context-ci/maintainers @context-ci/product
+docs/03-product/spec.md             @context-ci/product
+docs/05-contracts/                  @context-ci/maintainers
+docs/05-contracts/vendor/           @context-ci/maintainers
+docs/07-decisions/                  @context-ci/maintainers
+ROADMAP.md                          @context-ci/maintainers
+LICENSE                             @context-ci/maintainers
+.github/                            @context-ci/maintainers
+tools/                              @context-ci/maintainers
+```
+
+## Notes
+
+- A change to a vendored contract requires an approval from `context-ci/maintainers` **and** a
+  corresponding upstream contract in `acp-core`. You cannot change the contract from here.
+- `docs/02-market/` holds dated research. Do not silently correct it; add a dated note.
