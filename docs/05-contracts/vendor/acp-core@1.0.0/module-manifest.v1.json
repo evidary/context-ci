@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.example.invalid/acp-core/module-manifest.v1.json",
   "title": "Module Manifest v1",
-  "description": "What a module declares to the platform: identity, entitlements, the contracts it consumes and publishes, and its health endpoint.",
+  "description": "What a standalone module declares to the platform: identity, licence, the contracts it consumes and publishes, its entitlements and its health endpoint.",
   "type": "object",
   "required": [
     "module_id",

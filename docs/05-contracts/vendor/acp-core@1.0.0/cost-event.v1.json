@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.example.invalid/acp-core/cost-event.v1.json",
   "title": "Cost Event v1",
-  "description": "Normalised record of one metered unit of agent work. Published by acp-core; consumed by FinOps and any module that meters usage.",
+  "description": "One metered unit of agent work. Produced by an sdk, the proxy or an otlp receiver; consumed by the cost engine and by any module that meters usage.",
   "type": "object",
   "required": [
     "event_id",
