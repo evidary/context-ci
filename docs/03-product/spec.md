@@ -51,37 +51,81 @@ Every manifest records **which path produced it**, because a sample-based manife
 {
   "manifest_version": 1,
   "created_at": "2026-12-01T10:00:00Z",
-  "commit": "git-sha",
   "capture": {
-    "path": "instrumented|asserted|observed",
+    "path": "instrumented",
     "sdk_version": "0.1.0"
   },
+  "commit": "9c1f2ab",
   "model": {
-    "provider": "openai|anthropic|google|other",
-    "id": "string",
-    "alias_of": "string|null",
-    "params": {"temperature": 0, "max_tokens": 0, "seed": null}
+    "alias_of": null,
+    "id": "gpt-x",
+    "params": {
+      "max_tokens": 1024,
+      "temperature": "0"
+    },
+    "provider": "openai"
+  },
+  "policy": {
+    "guardrails_hash": null,
+    "version": "2026.11"
   },
   "prompt": {
-    "template_hash": "sha256",
-    "rendered_hash": "sha256",
-    "rendered_sample_hash": "sha256|null",
-    "variables": {"name": "type"}
+    "rendered_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "rendered_sample_hash": null,
+    "template_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "variables": {
+      "tone": "string"
+    }
+  },
+  "retrieval": {
+    "chunker": "recursive-800",
+    "embedding_model": "embed-3",
+    "embedding_model_version": "2026-05",
+    "filters_hash": null,
+    "index_id": "kb-prod",
+    "top_k": 5
   },
   "tools": [
-    {"name": "string", "schema_hash": "sha256", "description_hash": "sha256", "description_tokens": 0}
+    {
+      "description_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "description_tokens": 12,
+      "name": "refund.create",
+      "schema_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
   ],
-  "retrieval": {
-    "index_id": "string",
-    "embedding_model": "string",
-    "embedding_model_version": "string",
-    "chunker": "string",
-    "top_k": 0,
-    "filters_hash": "sha256|null"
-  },
-  "policy": {"version": "string", "guardrails_hash": "sha256|null"},
-  "digest": "sha256 over the canonicalised document above"
+  "digest": "9ac41aab288437780e7438a9f7061a59e235835848ce88143a3239544b06d1b1"
 }
+```
+
+Every value above is a legal value, and this document passes `context-ci check`. It is
+deliberately concrete: an earlier revision showed `"path": "instrumented|asserted|observed"`
+as a way of listing the alternatives, which is not a manifest any tool accepts, so a team
+following the specification produced a file the CLI rejected with exit 3.
+
+The example is in the **normalised form**, which is the form the digest covers. Two
+rules follow from that, and they are not symmetric:
+
+| Kind of field | In a manifest |
+|---|---|
+| Always emitted | `model.alias_of`, `prompt.rendered_sample_hash`, `retrieval.filters_hash` and `policy.guardrails_hash` are written as `null` when they have no value, because they are part of the document as the tool emits it |
+| Omitted when empty | `capture.sdk_version`, `capture.reason`, `model.params.temperature`, `model.params.max_tokens`, `model.params.seed`, `model.params.top_p` |
+
+The digest is computed over the document **after it has been read into the manifest
+structure**, so writing `"seed": null` and omitting `seed` produce the same digest, while
+writing `"filters_hash": null` and omitting `filters_hash` do not. A team implementing from
+this specification should emit the normalised form, so that the bytes on disk are the bytes
+that were hashed. `internal/manifest/spec_example_test.go` fails if this example ever stops
+reproducing its own digest.
+
+The values that are restricted, and what is allowed:
+
+| Field | Allowed |
+|---|---|
+| `capture.path` | `instrumented`, `asserted`, `observed` |
+| `model.provider` | `openai`, `anthropic`, `google`, `other` |
+| `model.params.temperature`, `top_p`, `seed` | decimal strings, so a value never depends on float formatting |
+| `prompt.variables` | variable name to declared type; values are never recorded |
+| hash fields | 64 lowercase hex characters |
 ```
 
 Rules:
