@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -177,6 +178,17 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture: resolve %s: %w", rel, err)
 	}
+	// A clean path comparison is not enough on a filesystem with symbolic links: a
+	// link inside the repository can point anywhere, and reading through it would
+	// hash a file the operator never agreed to expose. Resolve both sides first. A
+	// missing target makes EvalSymlinks fail, which is fine Ã¢â‚¬â€ the read then fails
+	// with a clearer error than a containment message.
+	if real, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
+		resolvedRoot = real
+	}
+	if real, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = real
+	}
 	if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(filepath.Separator)) {
 		return nil, ErrOutsideRoot{Path: rel}
 	}
@@ -221,8 +233,21 @@ func readTools(root, rel string) ([]manifest.Tool, error) {
 	}
 	var parsed toolsFile
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	// A misspelled key is silently ignored by an unstructured decode, which hashes
+	// null and leaves the real value outside the digest: a schema edit would then be
+	// invisible. `schema` is deliberately `any`, so this rejects typos in the tools
+	// file's own keys without constraining the JSON Schema inside.
+	dec.KnownFields(true)
 	if err := dec.Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("capture: tools: %w", err)
+	}
+	// A second document in the same file used to be ignored, so the half of the file
+	// that was read could disagree with the half that was written.
+	var extra any
+	if err := dec.Decode(&extra); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("capture: tools: %w", err)
+	} else if err == nil {
+		return nil, errors.New("capture: tools: the file holds more than one YAML document")
 	}
 	out := make([]manifest.Tool, 0, len(parsed.Tools))
 	seen := make(map[string]bool, len(parsed.Tools))
@@ -258,6 +283,33 @@ var credentialKeys = map[string]bool{
 	"authorization": true, "auth": true, "credential": true, "credentials": true,
 	"private_key": true, "client_secret": true, "session_token": true,
 	"bearer": true, "cookie": true, "set_cookie": true,
+	"passphrase": true, "connection_string": true, "subscription_key": true,
+	// Spellings that camelCase or concatenation produces, and which an exact
+	// match on the underscore form missed.
+	"access_token": true, "refresh_token": true, "id_token": true,
+	"auth_token": true, "bearer_token": true, "api_secret": true,
+	"accesskey": true, "secretkey": true, "privatekey": true,
+	"accesstoken": true, "refreshtoken": true, "idtoken": true,
+	"authtoken": true, "bearertoken": true, "apisecret": true,
+	"clientsecret": true, "subscriptionkey": true, "connectionstring": true,
+}
+
+// isCredentialKey reports whether a field name holds a secret. Names are compared
+// with separators removed as well as exactly, so access_token, accessToken and
+// access-token all match one entry.
+//
+// The match is still exact rather than a substring test on purpose: max_tokens,
+// token_budget and secret_name are ordinary configuration, and removing them
+// would quietly delete schema content from the hash input.
+func isCredentialKey(name string) bool {
+	lower := strings.ToLower(name)
+	if credentialKeys[lower] {
+		return true
+	}
+	if !strings.ContainsAny(lower, "_-.") {
+		return false
+	}
+	return credentialKeys[strings.NewReplacer("_", "", "-", "", ".", "").Replace(lower)]
 }
 
 // stripCredentials removes credential-shaped fields from a decoded schema. It
@@ -268,7 +320,7 @@ func stripCredentials(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(x))
 		for k, val := range x {
-			if credentialKeys[strings.ToLower(k)] {
+			if isCredentialKey(k) {
 				continue
 			}
 			out[k] = stripCredentials(val)
@@ -278,7 +330,7 @@ func stripCredentials(v any) any {
 		out := make(map[string]any, len(x))
 		for k, val := range x {
 			name := fmt.Sprint(k)
-			if credentialKeys[strings.ToLower(name)] {
+			if isCredentialKey(name) {
 				continue
 			}
 			out[name] = stripCredentials(val)

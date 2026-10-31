@@ -197,6 +197,73 @@ func TestCredentialFieldsDoNotAffectTheHash(t *testing.T) {
 	}
 }
 
+// TestCredentialSpellings covers the names an exact match on the snake_case form
+// missed. A schema field called accessToken took a different value on every run
+// and changed the digest, which is the exact failure stripping exists to prevent.
+func TestCredentialSpellings(t *testing.T) {
+	secret := "sk-live-abcdef123456"
+	for _, field := range []string{
+		"api_key", "apiKey", "api-key", "API_KEY",
+		"access_token", "accessToken", "access-token",
+		"privateKey", "private_key", "refreshToken", "clientSecret",
+		"secretKey", "subscriptionKey", "connectionString", "passphrase",
+	} {
+		base := "tools:\n  - name: a\n    description: d\n    schema:\n      type: object\n      properties:\n        order_id: {type: string}\n"
+		withSecret := base + "        " + field + ": {type: string, default: \"" + secret + "\"}\n"
+
+		rootA, rootB := t.TempDir(), t.TempDir()
+		write(t, rootA, "p.md", "prompt\n")
+		write(t, rootA, "tools.yaml", base)
+		write(t, rootB, "p.md", "prompt\n")
+		write(t, rootB, "tools.yaml", withSecret)
+
+		cfg := func() *config.Config {
+			return &config.Config{
+				Version: 1,
+				Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
+					config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
+				}},
+				Model: config.Model{ID: "m"},
+			}
+		}
+		at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+		a := build(t, cfg(), rootA, at)
+		b := build(t, cfg(), rootB, at)
+		if a.Tools[0].SchemaHash != b.Tools[0].SchemaHash {
+			t.Fatalf("field %q was not stripped: the secret changed the schema hash", field)
+		}
+	}
+}
+
+// TestOrdinaryFieldsSurvive guards the other direction. Stripping too much removes
+// real schema content from the hash input, and a schema change would then be
+// invisible.
+func TestOrdinaryFieldsSurvive(t *testing.T) {
+	base := "tools:\n  - name: a\n    description: d\n    schema:\n      type: object\n      properties:\n        order_id: {type: string}\n"
+	changed := base + "        max_tokens: {type: integer}\n"
+	rootA, rootB := t.TempDir(), t.TempDir()
+	write(t, rootA, "p.md", "prompt\n")
+	write(t, rootA, "tools.yaml", base)
+	write(t, rootB, "p.md", "prompt\n")
+	write(t, rootB, "tools.yaml", changed)
+
+	cfg := func() *config.Config {
+		return &config.Config{
+			Version: 1,
+			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
+				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
+			}},
+			Model: config.Model{ID: "m"},
+		}
+	}
+	at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	a := build(t, cfg(), rootA, at)
+	b := build(t, cfg(), rootB, at)
+	if a.Tools[0].SchemaHash == b.Tools[0].SchemaHash {
+		t.Fatal("adding max_tokens did not change the hash: an ordinary field was stripped")
+	}
+}
+
 func TestSourceOutsideRootIsRejected(t *testing.T) {
 	root, cfg := fixture(t, "prompt\n")
 	cfg.Capture.Sources[config.SourcePrompt] = "../escape.md"
