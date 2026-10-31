@@ -22,7 +22,14 @@ SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv"}
 LINK = re.compile(r"(!?)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 TABLE_SEP = re.compile(r"^\s*\|[\s:\-|]+\|\s*$")
-MOJIBAKE = ("\u00e2\u20ac", "\u00c3\u00a2", "\u00ef\u00bf\u00bd")
+MOJIBAKE = (
+    "\u00e2\u20ac",  # a UTF-8 em dash or quote decoded as cp1252
+    "\u00c3\u00a2",  # the same, double-encoded
+    "\u00ef\u00bf\u00bd",  # U+FFFD, a replacement character already in the text
+    "\u00c2\u00a0",  # a non-breaking space decoded as cp1252
+    "\u00e2\u0080",  # the cp1252 byte pair left by a BOM or a smart quote
+    "\u00c3\u00a9",  # an accented letter decoded as cp1252
+)
 
 # Paths that are allowed to exist without being listed in docs/00-index.md
 INDEX_EXEMPT = {"docs/05-contracts/vendor"}
@@ -71,19 +78,40 @@ def check_links(path, text):
 
 
 def check_tables(path, text):
+    """Every row of a table must have the same cell count as its header.
+
+    The previous version compared the first data row against the separator line and
+    skipped every row after it, so a table could lose a cell anywhere except the first
+    row and the gate stayed quiet. It now tracks the header for the whole block.
+    """
     lines = text.splitlines()
-    for i, line in enumerate(lines):
-        if not TABLE_ROW.match(line):
+
+    def cells(line):
+        return line.strip().strip("|").count("|") + 1
+
+    i = 0
+    while i < len(lines):
+        if not (TABLE_ROW.match(lines[i]) and i + 1 < len(lines) and TABLE_SEP.match(lines[i + 1])):
+            i += 1
             continue
-        if i == 0 or not TABLE_SEP.match(lines[i - 1]):
-            continue
-        header = lines[i - 1].strip().strip("|").count("|") + 1
-        row = line.strip().strip("|").count("|") + 1
-        if row != header:
-            errors.append("%s:%d: table has %d cells, header has %d" % (rel(path), i + 1, row, header))
+        header = cells(lines[i])
+        j = i + 2
+        while j < len(lines) and TABLE_ROW.match(lines[j]):
+            if cells(lines[j]) != header:
+                errors.append("%s:%d: table has %d cells, header has %d"
+                              % (rel(path), j + 1, cells(lines[j]), header))
+            j += 1
+        i = j
 
 
 def check_index_coverage(md_files):
+    """Every doc must be linked from the index by its path, not merely mentioned.
+
+    The rule used to accept a basename appearing anywhere in the index, so a file
+    called code-map.md was considered covered if the words appeared in a sentence, and
+    a file sharing a name with another was covered by that other file's entry. It now
+    requires the path from docs/ to appear.
+    """
     index = os.path.join(ROOT, "docs", "00-index.md")
     if not os.path.exists(index):
         errors.append("docs/00-index.md is missing")
@@ -93,23 +121,41 @@ def check_index_coverage(md_files):
         r = rel(p)
         if not r.startswith("docs/") or r == "docs/00-index.md":
             continue
-        if any(r.startswith(x) for x in INDEX_EXEMPT):
+        if any(r.startswith(x.rstrip("/") + "/") for x in INDEX_EXEMPT):
             continue
-        if os.path.basename(p) not in text:
-            errors.append("%s: not referenced from docs/00-index.md" % r)
+        from_docs = os.path.relpath(p, os.path.join(ROOT, "docs")).replace(os.sep, "/")
+        if from_docs not in text:
+            errors.append("%s: not linked from docs/00-index.md (expected a reference to %s)"
+                          % (r, from_docs))
 
 
 def check_contracts():
     cdir = os.path.join(ROOT, "docs", "05-contracts")
+    sdir = os.path.join(cdir, "schemas")
     sums = os.path.join(cdir, "CHECKSUMS.txt")
+    schemas = sorted(f for f in os.listdir(sdir)) if os.path.isdir(sdir) else []
+    schemas = [f for f in schemas if f.endswith(".json")]
+
     if not os.path.exists(sums):
+        # The gate used to return here, so a repository with schemas and no checksums at
+        # all passed the check whose whole purpose is to notice that.
+        if schemas:
+            errors.append("docs/05-contracts/schemas exists but CHECKSUMS.txt does not")
         return
+
+    listed = set()
     for line in open(sums, encoding="utf-8"):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        digest, name = line.split(None, 1)
-        name = name.strip()
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            # A malformed line used to raise ValueError and abort the whole run with a
+            # traceback, which reads as a tooling bug rather than a failure.
+            errors.append("CHECKSUMS.txt: cannot parse %r" % line)
+            continue
+        digest, name = parts[0], parts[1].strip()
+        listed.add(os.path.basename(name))
         target = os.path.normpath(os.path.join(cdir, name))
         if not os.path.exists(target):
             errors.append("CHECKSUMS.txt references missing file %s" % name)
@@ -117,14 +163,18 @@ def check_contracts():
         actual = hashlib.sha256(open(target, "rb").read()).hexdigest()
         if actual != digest:
             errors.append("%s: checksum mismatch (expected %s, got %s)" % (name, digest[:12], actual[:12]))
-    sdir = os.path.join(cdir, "schemas")
-    if os.path.isdir(sdir):
-        for f in sorted(os.listdir(sdir)):
-            if f.endswith(".json"):
-                try:
-                    json.load(open(os.path.join(sdir, f), encoding="utf-8"))
-                except json.JSONDecodeError as e:
-                    errors.append("schemas/%s: invalid JSON (%s)" % (f, e))
+
+    # A schema that is not listed was never checked, which is how a published contract
+    # could change without any gate noticing.
+    for f in schemas:
+        if f == "index.json":
+            continue
+        if f not in listed:
+            errors.append("schemas/%s is not listed in CHECKSUMS.txt" % f)
+        try:
+            json.load(open(os.path.join(sdir, f), encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            errors.append("schemas/%s: invalid JSON (%s)" % (f, e))
 
 
 def main():
