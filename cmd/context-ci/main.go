@@ -308,7 +308,8 @@ func writeText(w io.Writer, r *diff.Result) {
 // next to the diff instead of only in a log.
 func writeGitHub(w io.Writer, r *diff.Result) {
 	if r.Equal() {
-		fmt.Fprintf(w, "::notice title=context-ci::no change in context (%s)\n", short(r.HeadDigest))
+		fmt.Fprintf(w, "::notice title=%s::no change in context (%s)\n",
+			escapeProperty("context-ci"), escapeData(short(r.HeadDigest)))
 		return
 	}
 	for _, e := range r.Entries {
@@ -319,25 +320,42 @@ func writeGitHub(w io.Writer, r *diff.Result) {
 		if e.Severity == diff.SeverityIgnore {
 			level = "notice"
 		}
-		fmt.Fprintf(w, "::%s title=context-ci %s::%s",
-			level, escapeGitHub(string(e.Class)), escapeGitHub(e.Summary))
+		// The title is a property and the rest is the message. They have different
+		// escaping rules: a colon in a message is legal and must survive, while a
+		// colon in a property would end the property list early.
+		fmt.Fprintf(w, "::%s title=%s::%s",
+			level, escapeProperty("context-ci "+string(e.Class)), escapeData(e.Summary))
 		if e.Before != "" || e.After != "" {
-			fmt.Fprintf(w, " (%s -> %s)", escapeGitHub(orDash(e.Before)), escapeGitHub(orDash(e.After)))
+			fmt.Fprintf(w, " (%s -> %s)", escapeData(orDash(e.Before)), escapeData(orDash(e.After)))
 		}
 		if e.Detail != "" {
-			fmt.Fprintf(w, " %s", escapeGitHub(e.Detail))
+			fmt.Fprintf(w, " %s", escapeData(e.Detail))
 		}
 		fmt.Fprintln(w)
 	}
 }
 
-// escapeGitHub applies the escaping workflow commands require, so a value from a
-// manifest cannot inject a second command.
-func escapeGitHub(s string) string {
-	r := strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A", ":", "%3A", ",", "%2C")
-	return r.Replace(s)
+// escapeData escapes a message. GitHub unescapes only these three sequences in a
+// message, so escaping anything else would show the escape itself to the reader.
+func escapeData(s string) string {
+	return strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A").Replace(s)
 }
 
+// escapeProperty escapes a property value, where a colon or comma would end the
+// property list and let a manifest value start a second workflow command.
+func escapeProperty(s string) string {
+	return strings.NewReplacer(
+		"%", "%25", "\r", "%0D", "\n", "%0A", ":", "%3A", ",", "%2C",
+	).Replace(s)
+}
+
+// readManifest reads a manifest and proves it is the manifest it claims to be.
+//
+// Recomputing the digest is not optional. Without it the digest is decorative: a
+// baseline committed to a repository could be edited so the gate sees no change,
+// and the file would keep reporting the digest of a document it no longer
+// contains. Both files would show the same digest while disagreeing about the
+// model, which is the worst possible failure for a tool whose output is evidence.
 func readManifest(path string) (*manifest.Manifest, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -348,8 +366,17 @@ func readManifest(path string) (*manifest.Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("%s is not a manifest: %w", path, err)
 	}
-	if err := m.Validate(); err != nil {
+	stored := m.Digest
+	recomputed, err := m.Compute()
+	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if stored == "" {
+		return nil, fmt.Errorf("%s carries no digest, so it cannot be shown to be unedited", path)
+	}
+	if !strings.EqualFold(stored, recomputed) {
+		return nil, fmt.Errorf("%s was modified after it was produced: the stored digest is %s "+
+			"but its content hashes to %s", path, short(stored), short(recomputed))
 	}
 	return &m, nil
 }

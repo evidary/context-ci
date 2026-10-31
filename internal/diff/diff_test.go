@@ -289,6 +289,42 @@ func TestPromptEditsDoNotBlockEveryBuild(t *testing.T) {
 	}
 }
 
+// TestDerivedRenderedHashDoesNotDoubleReport covers a case that made ordinary use
+// of the tool look broken: with no rendered sample, capture sets rendered_hash
+// equal to template_hash, so one prompt edit produced two identical entries.
+func TestDerivedRenderedHashDoesNotDoubleReport(t *testing.T) {
+	baseM, headM := base(), base()
+	// Model the no-rendered-sample case: both hashes track the template.
+	baseM.Prompt.TemplateHash = strings.Repeat("a", 64)
+	baseM.Prompt.RenderedHash = strings.Repeat("a", 64)
+	headM.Prompt.TemplateHash = strings.Repeat("b", 64)
+	headM.Prompt.RenderedHash = strings.Repeat("b", 64)
+
+	r := Compare(baseM, headM, Options{})
+	if len(r.Entries) != 1 {
+		t.Fatalf("one prompt edit produced %d entries: %v", len(r.Entries), classNames(r))
+	}
+	if r.Entries[0].Class != ClassPromptTemplateHash {
+		t.Fatalf("entry class = %s, want the template class", r.Entries[0].Class)
+	}
+}
+
+// TestRealRenderedChangeIsStillReported is the other half of the previous test: a
+// rendered sample that differs from the template must still produce its own entry.
+func TestRealRenderedChangeIsStillReported(t *testing.T) {
+	baseM, headM := base(), base()
+	headM.Prompt.TemplateHash = strings.Repeat("a", 64) // template unchanged
+	headM.Prompt.RenderedHash = strings.Repeat("c", 64) // rendered output differs from base
+
+	r := Compare(baseM, headM, Options{})
+	if _, ok := classes(r)[ClassPromptRenderedHash]; !ok {
+		t.Fatalf("a changed rendered hash was suppressed: %v", classNames(r))
+	}
+	if len(r.Entries) != 1 {
+		t.Fatalf("expected exactly the rendered entry, got %v", classNames(r))
+	}
+}
+
 // TestUnknownClassesAreDetectable backs configuration validation: a typo in a
 // severity override must be catchable rather than silently inert.
 func TestUnknownClassesAreDetectable(t *testing.T) {

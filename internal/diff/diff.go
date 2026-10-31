@@ -229,7 +229,13 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 			short(base.Prompt.TemplateHash), short(head.Prompt.TemplateHash), contentHint(base, head, "template"))
 	}
 
-	if base.Prompt.RenderedHash == head.Prompt.RenderedHash {
+	// When no rendered sample was supplied, capture sets rendered_hash equal to
+	// template_hash. Reporting both would describe one edit twice, so the derived
+	// entry is suppressed while the manifest itself still carries both fields.
+	renderedIsDerived := base.Prompt.RenderedHash == base.Prompt.TemplateHash &&
+		head.Prompt.RenderedHash == head.Prompt.TemplateHash
+
+	if base.Prompt.RenderedHash == head.Prompt.RenderedHash || renderedIsDerived {
 		unchanged(ClassPromptRenderedHash)
 	} else {
 		add(ClassPromptRenderedHash, "the rendered prompt changed",

@@ -214,6 +214,100 @@ func TestDiffJSONFormat(t *testing.T) {
 	}
 }
 
+// TestTamperedManifestIsRejected is the guard against the most dangerous failure
+// this tool could have. A baseline lives in the repository, so if the digest were
+// not rechecked it could be edited to hide a regression, and both the baseline and
+// the head would report the same digest while disagreeing about the model.
+func TestTamperedManifestIsRejected(t *testing.T) {
+	root := repo(t, "gpt-x")
+	base := manifestFor(t, root, "base.json")
+
+	forged := filepath.Join(t.TempDir(), "forged.json")
+	raw, err := os.ReadFile(base)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	model, _ := doc["model"].(map[string]any)
+	model["id"] = "gpt-y" // change the content, keep the digest
+	forgedRaw, _ := json.MarshalIndent(doc, "", "  ")
+	if err := os.WriteFile(forged, forgedRaw, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	head := manifestFor(t, repo(t, "gpt-y"), "head.json")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"check", "--root", root, "--baseline", forged, "--head", head}, &stdout, &stderr)
+	if code != ExitManifest {
+		t.Fatalf("exit = %d, want %d for a forged baseline\n%s", code, ExitManifest, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "modified after it was produced") {
+		t.Fatalf("error does not explain the rejection: %s", stderr.String())
+	}
+}
+
+// TestManifestWithoutDigestIsRejected covers a hand-written manifest, which would
+// otherwise slip past the gate with no provenance at all.
+func TestManifestWithoutDigestIsRejected(t *testing.T) {
+	root := repo(t, "gpt-x")
+	base := manifestFor(t, root, "base.json")
+
+	raw, _ := os.ReadFile(base)
+	var doc map[string]any
+	json.Unmarshal(raw, &doc)
+	delete(doc, "digest")
+	stripped := filepath.Join(t.TempDir(), "stripped.json")
+	strippedRaw, _ := json.MarshalIndent(doc, "", "  ")
+	os.WriteFile(stripped, strippedRaw, 0o644)
+
+	head := manifestFor(t, root, "head.json")
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"diff", stripped, head}, &stdout, &stderr); code != ExitManifest {
+		t.Fatalf("exit = %d, want %d for a manifest with no digest", code, ExitManifest)
+	}
+}
+
+// TestGitHubMessageEscaping covers the difference between the two escaping rules.
+// Escaping a colon in the message body would show "%3A" to the reader, because
+// GitHub only unescapes percent, carriage return and newline there.
+func TestGitHubMessageEscaping(t *testing.T) {
+	if got, want := escapeData("a: b, c"), "a: b, c"; got != want {
+		t.Fatalf("escapeData(%q) = %q, want %q: a colon in a message is legal", "a: b, c", got, want)
+	}
+	if got, want := escapeData("line\nbreak"), "line%0Abreak"; got != want {
+		t.Fatalf("escapeData(newline) = %q, want %q", got, want)
+	}
+	if got, want := escapeData("100%"), "100%25"; got != want {
+		t.Fatalf("escapeData(percent) = %q, want %q", got, want)
+	}
+	if got, want := escapeProperty("a: b, c"), "a%3A b%2C c"; got != want {
+		t.Fatalf("escapeProperty(%q) = %q, want %q: a colon would end the property list", "a: b, c", got, want)
+	}
+}
+
+// TestGitHubOutputKeepsPunctuationReadable is the end-to-end version: a message with
+// a colon and a comma must appear intact.
+func TestGitHubOutputKeepsPunctuationReadable(t *testing.T) {
+	base := manifestFor(t, repo(t, "gpt-x"), "base.json")
+	root := repo(t, "gpt-y")
+	head := manifestFor(t, root, "head.json")
+
+	var stdout, stderr bytes.Buffer
+	run([]string{"check", "--root", root, "--baseline", base, "--head", head, "--format", "github"}, &stdout, &stderr)
+
+	out := stdout.String()
+	if strings.Contains(out, "%2C") || strings.Contains(out, "%3A") {
+		t.Fatalf("punctuation in the message was escaped and will be shown literally:\n%s", out)
+	}
+	if !strings.Contains(out, "gpt-x -> gpt-y") {
+		t.Fatalf("the message body was mangled:\n%s", out)
+	}
+}
+
 func TestUsageErrors(t *testing.T) {
 	root := repo(t, "gpt-x")
 	cases := [][]string{
