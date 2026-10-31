@@ -16,6 +16,10 @@ Context CI has exactly four verbs. Anything that is not one of them is out of sc
 | **Attribute** | `context-ci attribute --results <file>` | Correlates a quality, cost or safety delta with diff entries |
 | **Gate** | `context-ci check` | Exits non-zero when the diff violates configured thresholds |
 
+Implementation status, so this table is not mistaken for a description of the binary:
+Capture, Compare and Gate are implemented and tested; **Attribute is not**. The gap
+and its reason are in [cli-reference.md](cli-reference.md) §8.
+
 ## 2. Non-goals
 
 | Not building | Why |
