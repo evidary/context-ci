@@ -22,6 +22,7 @@
 | Which platform contracts we consume and at what version | [05-contracts/README.md](05-contracts/README.md) |
 | Who does the work, and how we measure it | [06-operations/squad-and-metrics.md](06-operations/squad-and-metrics.md) |
 | Why this is a separate repository | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) |
+| Which language the CLI is written in, and why the SDKs are not | [07-decisions/adr-0002-implementation-language.md](07-decisions/adr-0002-implementation-language.md) |
 | What is decided and what is still open | [07-decisions/README.md](07-decisions/README.md) |
 | Milestones and dates | [../ROADMAP.md](../ROADMAP.md) |
 | How to contribute | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -42,6 +43,7 @@
 | [06-operations/squad-and-metrics.md](06-operations/squad-and-metrics.md) | Squad charter, rituals, decision rights, the metrics that matter, and the release process | Current |
 | [07-decisions/README.md](07-decisions/README.md) | Decision register | Current |
 | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) | Why this is its own repository and its own licence, and what it may never depend on | Current |
+| [07-decisions/adr-0002-implementation-language.md](07-decisions/adr-0002-implementation-language.md) | Go for the CLI, Python and TypeScript for the capture SDKs, and why the split buys more than one language everywhere | Current |
 
 ---
 
