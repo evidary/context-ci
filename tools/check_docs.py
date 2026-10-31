@@ -65,16 +65,63 @@ def check_encoding(path):
 
 
 def check_links(path, text):
+    """Resolve every local link, including its fragment.
+
+    The previous version used the text inside the parentheses as the filename, so
+    `[x](<path with spaces>)` was looked up with its angle brackets and reported broken
+    although the file exists, and `[q](real.md?x=1)` was reported broken for a file that
+    exists. A folder full of false positives is a rule people stop reading, so both are
+    handled. Fragments were not checked at all; a link to a heading that no longer exists
+    is broken in the same way a missing file is, so it is now reported too.
+    """
     base = os.path.dirname(path)
     for m in LINK.finditer(text):
-        target = m.group(2)
-        if target.startswith(("http://", "https://", "mailto:", "#")):
+        target = m.group(2).strip()
+        if target.startswith(("http://", "https://", "mailto:")):
             continue
-        clean = target.split("#")[0]
-        if not clean:
-            continue
-        if not os.path.exists(os.path.normpath(os.path.join(base, clean))):
-            errors.append("%s: broken link -> %s" % (rel(path), target))
+        # Angle brackets are markdown's way of allowing spaces in a path.
+        if target.startswith("<") and target.endswith(">"):
+            target = target[1:-1]
+        target = target.split("?", 1)[0]
+        file_part, _, fragment = target.partition("#")
+
+        if file_part:
+            resolved = os.path.normpath(os.path.join(base, file_part))
+            if not os.path.exists(resolved):
+                errors.append("%s: broken link -> %s" % (rel(path), m.group(2)))
+                continue
+        else:
+            resolved = path
+
+        if fragment and resolved.endswith(".md") and os.path.exists(resolved):
+            if fragment.lower() not in anchors_in(resolved):
+                errors.append("%s: link to a heading that does not exist -> %s"
+                              % (rel(path), m.group(2)))
+
+
+def slugify_heading(line):
+    """Turn a markdown heading into the anchor form GitHub generates.
+
+    Lowercase, drop anything that is not a letter, digit, space, hyphen or underscore,
+    then join words with hyphens. Close enough for this repository's headings, which is
+    where the check is applied.
+    """
+    text = line.strip().lstrip("#").strip().lower()
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
+    text = re.sub(r"\s+", "-", text.strip())
+    return text
+
+
+
+
+def anchors_in(path):
+    found = set()
+    for line in open(path, encoding="utf-8"):
+        if line.lstrip().startswith("#"):
+            found.add(slugify_heading(line))
+    return found
+
+
 
 
 def check_tables(path, text):
