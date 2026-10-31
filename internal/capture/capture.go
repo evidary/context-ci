@@ -181,7 +181,7 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 	// A clean path comparison is not enough on a filesystem with symbolic links: a
 	// link inside the repository can point anywhere, and reading through it would
 	// hash a file the operator never agreed to expose. Resolve both sides first. A
-	// missing target makes EvalSymlinks fail, which is fine ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the read then fails
+	// missing target makes EvalSymlinks fail, which is fine: the read then fails
 	// with a clearer error than a containment message.
 	if real, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
 		resolvedRoot = real
@@ -260,7 +260,7 @@ func readTools(root, rel string) ([]manifest.Tool, error) {
 		}
 		seen[t.Name] = true
 
-		schema := stripCredentials(t.Schema)
+		schema := redactSecretValues(stripCredentials(t.Schema))
 		canonical, err := json.Marshal(schema)
 		if err != nil {
 			return nil, fmt.Errorf("capture: tools: %q schema: %w", t.Name, err)
@@ -346,6 +346,58 @@ func stripCredentials(v any) any {
 		out := make([]any, len(x))
 		for i, item := range x {
 			out[i] = stripCredentials(item)
+		}
+		return out
+	default:
+		return x
+	}
+}
+
+// secretValuePatterns are shapes that are a credential whatever the field is called.
+// Key-name matching cannot see a token stored under `example`, `default` or
+// `sample`, and those are exactly where a copied-and-pasted real token ends up.
+//
+// This is a second line, not a replacement: a random secret with no recognisable
+// prefix is still missed. The key-name pass catches the field; this catches the
+// value that leaked into a field nobody thought to name.
+var secretValuePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`),                     // provider API keys
+	regexp.MustCompile(`\bsk_(live|test)_[A-Za-z0-9]{16,}`),           // payment processors
+	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),                        // AWS access key id
+	regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{36,}`),                // GitHub tokens
+	regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}`),              // Slack tokens
+	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`), // JWT
+	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),          // PEM private key
+	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`),                   // Google API key
+}
+
+// redactedValue replaces a recognised secret. It is a fixed marker rather than a
+// hash: a hash of a rotated token would change the digest on every rotation, which
+// is the noise redaction exists to remove.
+const redactedValue = "<redacted>"
+
+// redactSecretValues walks a decoded schema and replaces any string that looks like
+// a credential. The field itself stays, so the shape of the schema is still part of
+// the digest and a schema change is still visible.
+func redactSecretValues(v any) any {
+	switch x := v.(type) {
+	case string:
+		for _, re := range secretValuePatterns {
+			if re.MatchString(x) {
+				return redactedValue
+			}
+		}
+		return x
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			out[k] = redactSecretValues(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, item := range x {
+			out[i] = redactSecretValues(item)
 		}
 		return out
 	default:

@@ -302,6 +302,44 @@ func TestDescriptionEditWithTheSameLengthIsVisible(t *testing.T) {
 	}
 }
 
+// TestSecretValuesAreRedacted covers the half that key names cannot reach. A real
+// token pasted into a field called `example` or `default` has no credential-shaped
+// name, so stripping by name left it in the hash input - and a schema committed with
+// content capture would have carried it into the repository.
+func TestSecretValuesAreRedacted(t *testing.T) {
+	base := "tools:\n  - name: a\n    description: d\n    schema:\n      type: object\n      properties:\n        order_id: {type: string}\n"
+	withSecret := base + "        example: {type: string, default: \"sk-live-abcdef1234567890\"}\n"
+	withMarker := base + "        example: {type: string, default: \"<redacted>\"}\n"
+
+	cfg := func() *config.Config {
+		return &config.Config{
+			Version: 1,
+			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
+				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
+			}},
+			Model: config.Model{ID: "m"},
+		}
+	}
+	build := func(toolsYAML string) *manifest.Manifest {
+		root := t.TempDir()
+		write(t, root, "p.md", "prompt\n")
+		write(t, root, "tools.yaml", toolsYAML)
+		return build(t, cfg(), root, time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	}
+
+	secret := build(withSecret)
+	if secret.Tools[0].SchemaHash != build(withMarker).Tools[0].SchemaHash {
+		t.Fatal("a recognised secret value was not replaced by the marker")
+	}
+
+	// Two different secrets in a benign field must agree: a rotation is not a schema
+	// change and must not fail the gate.
+	other := base + "        example: {type: string, default: \"ghp_012345678901234567890123456789012345\"}\n"
+	if build(other).Tools[0].SchemaHash != secret.Tools[0].SchemaHash {
+		t.Fatal("rotating the secret changed the schema hash")
+	}
+}
+
 func TestSourceOutsideRootIsRejected(t *testing.T) {
 	root, cfg := fixture(t, "prompt\n")
 	cfg.Capture.Sources[config.SourcePrompt] = "../escape.md"

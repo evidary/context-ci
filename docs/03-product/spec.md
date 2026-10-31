@@ -89,7 +89,7 @@ Rules:
 1. **Hashes, not content, by default.** A manifest is safe to commit. Content capture is opt-in and off by default.
 2. **Deterministic.** The same inputs produce a byte-identical manifest, or the tool is broken. The only exception is `created_at`, which is excluded from `digest`.
 3. **The rendered prompt is hashed, not stored**, unless the team opts in. Where a sample is captured it is hashed separately and labelled.
-4. **No secrets.** Tool definitions are hashed after stripping any credential-shaped field.
+4. **No secrets.** Tool definitions are hashed after stripping any credential-shaped field, and any string that matches a recognised token shape is replaced with `<redacted>` whatever its field is called. A random secret with no recognisable prefix is still missed; this is a safety net, not a guarantee.
 5. **Everything that steers the model is hashed.** A field is inside the digest, or it is a plaintext copy that is verified against its hash on load. A count is never the record: `description_tokens` estimates, `description_hash` decides. See [ADR-0007](../07-decisions/adr-0007-unit-of-integrity.md).
 
 ## 5. The diff
