@@ -1,6 +1,8 @@
 package manifest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -30,8 +32,8 @@ func sample() *Manifest {
 			Variables:    map[string]string{"tone": "string", "locale": "string"},
 		},
 		Tools: []Tool{
-			{Name: "refund.create", SchemaHash: strings.Repeat("c", 64), DescriptionTokens: 120},
-			{Name: "ticket.read", SchemaHash: strings.Repeat("d", 64), DescriptionTokens: 40},
+			{Name: "refund.create", SchemaHash: strings.Repeat("c", 64), DescriptionHash: ptr(strings.Repeat("e", 64)), DescriptionTokens: 120},
+			{Name: "ticket.read", SchemaHash: strings.Repeat("d", 64), DescriptionHash: ptr(strings.Repeat("f", 64)), DescriptionTokens: 40},
 		},
 		Retrieval: Retrieval{
 			IndexID:               "kb-prod",
@@ -61,7 +63,7 @@ func TestDigestIsStable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute() error = %v", err)
 	}
-	const want = "295cb37ade2714bbf205165640d6cbed82a9be7de4ab6a57b53423500c6fad76"
+	const want = "e342a0e16c0586531d21b7759cdeb1f1d67102b7cd9eade78a8965fa1c8bccf0"
 	if got != want {
 		t.Fatalf("digest = %s\npinned  %s\nif this is intentional then every stored "+
 			"manifest stops matching and the SDKs need the same change", got, want)
@@ -99,7 +101,9 @@ func TestDigestIgnoresContent(t *testing.T) {
 	}
 
 	withContent := sample()
-	withContent.Content = []Content{{Kind: "prompt", Hash: strings.Repeat("e", 64), Body: "hello"}}
+	body := "hello"
+	sum := sha256.Sum256([]byte(body))
+	withContent.Content = []Content{{Kind: "prompt", Hash: hex.EncodeToString(sum[:]), Body: body}}
 	d2, err := withContent.Compute()
 	if err != nil {
 		t.Fatalf("Compute() error = %v", err)
@@ -130,9 +134,12 @@ func TestDigestNoticesEveryField(t *testing.T) {
 		"prompt.template_hash":     func(m *Manifest) { m.Prompt.TemplateHash = strings.Repeat("1", 64) },
 		"prompt.rendered_hash":     func(m *Manifest) { m.Prompt.RenderedHash = strings.Repeat("2", 64) },
 		"prompt.variables":         func(m *Manifest) { m.Prompt.Variables["tone"] = "enum" },
-		"tools.added":              func(m *Manifest) { m.Tools = append(m.Tools, Tool{Name: "x", SchemaHash: strings.Repeat("7", 64)}) },
+		"tools.added": func(m *Manifest) {
+			m.Tools = append(m.Tools, Tool{Name: "x", SchemaHash: strings.Repeat("7", 64), DescriptionHash: ptr(strings.Repeat("7", 64))})
+		},
 		"tools.removed":            func(m *Manifest) { m.Tools = m.Tools[:1] },
 		"tools.schema_hash":        func(m *Manifest) { m.Tools[0].SchemaHash = strings.Repeat("8", 64) },
+		"tools.description_hash":   func(m *Manifest) { m.Tools[0].DescriptionHash = ptr(strings.Repeat("8", 64)) },
 		"tools.description_tokens": func(m *Manifest) { m.Tools[0].DescriptionTokens = 121 },
 		"retrieval.index_id":       func(m *Manifest) { m.Retrieval.IndexID = "kb-staging" },
 		"retrieval.embedding":      func(m *Manifest) { m.Retrieval.EmbeddingModel = "embed-4" },

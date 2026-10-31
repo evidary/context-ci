@@ -92,9 +92,10 @@ type Prompt struct {
 
 // Tool is one callable the model can reach.
 type Tool struct {
-	Name              string `json:"name"`
-	SchemaHash        string `json:"schema_hash"`
-	DescriptionTokens int    `json:"description_tokens"`
+	Name              string  `json:"name"`
+	SchemaHash        string  `json:"schema_hash"`
+	DescriptionHash   *string `json:"description_hash"`
+	DescriptionTokens int     `json:"description_tokens"`
 }
 
 // Retrieval is the whole retrieval configuration. Changing any of it changes what
@@ -121,6 +122,36 @@ type Content struct {
 	Kind string `json:"kind"`
 	Hash string `json:"hash"`
 	Body string `json:"body"`
+}
+
+// ContentKinds are the kinds a Content entry may declare. A captured prompt, the
+// rendered prompt, and a tool description are the three things that steer a model.
+var ContentKinds = []string{"prompt", "rendered", "tool_description"}
+
+// Validate checks that the plaintext is the plaintext. The manifest digest
+// deliberately excludes content, so without this the body is an unchecked
+// annotation: a reviewer would read text the model was never given, next to a hash
+// that says so and a verifier that reports nothing wrong.
+func (c Content) Validate() error {
+	if !isSHA256Hex(c.Hash) {
+		return fmt.Errorf("manifest: content %q hash is not 64 hex characters", c.Kind)
+	}
+	known := false
+	for _, k := range ContentKinds {
+		if c.Kind == k {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return fmt.Errorf("manifest: content kind %q is not one of %s", c.Kind, strings.Join(ContentKinds, ", "))
+	}
+	sum := sha256.Sum256([]byte(c.Body))
+	if got := hex.EncodeToString(sum[:]); got != c.Hash {
+		return fmt.Errorf("manifest: content %q body does not match its hash (body hashes to %s, entry says %s)",
+			c.Kind, got, c.Hash)
+	}
+	return nil
 }
 
 // Compute sets Digest and returns it. The digest covers the document with
@@ -208,6 +239,24 @@ func (m *Manifest) Validate() error {
 		seen[t.Name] = true
 		if !isSHA256Hex(t.SchemaHash) {
 			return fmt.Errorf("manifest: tool %q schema_hash is not 64 hex characters", t.Name)
+		}
+	}
+	// A tool's description steers the model as much as its schema does, and the only
+	// record of it used to be a token count - which cannot detect an edit that keeps
+	// the length. The hash is required; the count is not trusted for anything.
+	for _, t := range m.Tools {
+		if t.DescriptionHash == nil || !isSHA256Hex(*t.DescriptionHash) {
+			return fmt.Errorf("manifest: tool %q has no description_hash; a token count cannot record what the description said", t.Name)
+		}
+	}
+	kinds := make(map[string]bool, len(m.Content))
+	for _, c := range m.Content {
+		if kinds[c.Kind] {
+			return fmt.Errorf("manifest: content %q appears twice", c.Kind)
+		}
+		kinds[c.Kind] = true
+		if err := c.Validate(); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -69,7 +69,7 @@ Every manifest records **which path produced it**, because a sample-based manife
     "variables": {"name": "type"}
   },
   "tools": [
-    {"name": "string", "schema_hash": "sha256", "description_tokens": 0}
+    {"name": "string", "schema_hash": "sha256", "description_hash": "sha256", "description_tokens": 0}
   ],
   "retrieval": {
     "index_id": "string",
@@ -90,6 +90,7 @@ Rules:
 2. **Deterministic.** The same inputs produce a byte-identical manifest, or the tool is broken. The only exception is `created_at`, which is excluded from `digest`.
 3. **The rendered prompt is hashed, not stored**, unless the team opts in. Where a sample is captured it is hashed separately and labelled.
 4. **No secrets.** Tool definitions are hashed after stripping any credential-shaped field.
+5. **Everything that steers the model is hashed.** A field is inside the digest, or it is a plaintext copy that is verified against its hash on load. A count is never the record: `description_tokens` estimates, `description_hash` decides. See [ADR-0007](../07-decisions/adr-0007-unit-of-integrity.md).
 
 ## 5. The diff
 
@@ -102,6 +103,7 @@ A text diff of two manifests is useless — JSON key order alone would produce n
 | `model.params` changed | temperature 0 → 0.7 | Warn |
 | `prompt.rendered_hash` changed | any rendered change | Warn, with a text diff if content was captured |
 | `tools[]` added/removed | a tool gained or lost | Fail |
+| `tools[].description_hash` changed | an edit that keeps the length | Fail |
 | `tools[].description_tokens` delta | +900 tokens | Warn with a cost projection |
 | `retrieval.embedding_model` changed | re-embed | Fail |
 | `retrieval.top_k` changed | 5 → 20 | Warn |

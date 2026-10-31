@@ -181,7 +181,7 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 	// A clean path comparison is not enough on a filesystem with symbolic links: a
 	// link inside the repository can point anywhere, and reading through it would
 	// hash a file the operator never agreed to expose. Resolve both sides first. A
-	// missing target makes EvalSymlinks fail, which is fine Ã¢â‚¬â€ the read then fails
+	// missing target makes EvalSymlinks fail, which is fine ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the read then fails
 	// with a clearer error than a containment message.
 	if real, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
 		resolvedRoot = real
@@ -266,15 +266,21 @@ func readTools(root, rel string) ([]manifest.Tool, error) {
 			return nil, fmt.Errorf("capture: tools: %q schema: %w", t.Name, err)
 		}
 		sum := sha256.Sum256(canonical)
+		descriptionHash := sha256.Sum256([]byte(t.Description))
 		out = append(out, manifest.Tool{
-			Name:              t.Name,
-			SchemaHash:        hex.EncodeToString(sum[:]),
+			Name:            t.Name,
+			SchemaHash:      hex.EncodeToString(sum[:]),
+			DescriptionHash: ptrTo(hex.EncodeToString(descriptionHash[:])),
+			// Kept because a human reads it, and never used to detect a change: an edit
+			// that preserves the word count leaves it identical.
 			DescriptionTokens: EstimateTokens(t.Description),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
+
+func ptrTo(s string) *string { return &s }
 
 // credentialKeys are field names whose values never enter a hash input.
 var credentialKeys = map[string]bool{

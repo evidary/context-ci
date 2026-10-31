@@ -46,6 +46,7 @@
 | [07-decisions/README.md](07-decisions/README.md) | Decision register | Current |
 | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) | Why this is its own repository and its own licence, and what it may never depend on | Current |
 | [07-decisions/adr-0002-implementation-language.md](07-decisions/adr-0002-implementation-language.md) | Go for the CLI, Python and TypeScript for the capture SDKs, and why the split buys more than one language everywhere | Current |
+| [07-decisions/adr-0007-unit-of-integrity.md](07-decisions/adr-0007-unit-of-integrity.md) | What the digest covers: everything that steers the model is hashed; a count is never the record; a plaintext copy must verify against its hash | Current |
 
 ---
 

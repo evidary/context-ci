@@ -165,6 +165,7 @@ func TestEveryClassIsReachable(t *testing.T) {
 		ClassPromptRenderedHash:    func(m *manifest.Manifest) { m.Prompt.RenderedHash = strings.Repeat("1", 64) },
 		ClassTools:                 func(m *manifest.Manifest) { m.Tools[0].SchemaHash = strings.Repeat("2", 64) },
 		ClassToolDescriptionTokens: func(m *manifest.Manifest) { m.Tools[0].DescriptionTokens = 99 },
+		ClassToolDescription:       func(m *manifest.Manifest) { h := strings.Repeat("5", 64); m.Tools[0].DescriptionHash = &h },
 		ClassRetrievalEmbedding:    func(m *manifest.Manifest) { m.Retrieval.EmbeddingModelVersion = "2027-01" },
 		ClassRetrievalTopK:         func(m *manifest.Manifest) { m.Retrieval.TopK = 9 },
 		ClassRetrievalFiltersHash:  func(m *manifest.Manifest) { m.Retrieval.FiltersHash = nil },

@@ -48,6 +48,10 @@ const (
 	ClassRetrievalChunker     Class = "retrieval.chunker"
 	ClassPolicyGuardrailsHash Class = "policy.guardrails_hash"
 	ClassCapturePath          Class = "capture.path"
+	// ClassToolDescription is the hash of a tool's description. It exists separately
+	// from ClassToolDescriptionTokens because a count cannot see an edit that keeps
+	// the length: "issue a refund" and "ignore prior rules" are the same token count.
+	ClassToolDescription Class = "tools.description"
 )
 
 // Severity is how a change is treated by the gate.
@@ -81,6 +85,10 @@ func DefaultSeverity(c Class) Severity {
 		return SeverityFail
 	case ClassPromptVariables, ClassRetrievalIndexID, ClassRetrievalChunker, ClassCapturePath:
 		return SeverityWarn
+	case ClassToolDescription:
+		// A tool description is prompt-injection surface that the model reads as
+		// instructions. Same severity as the schema it sits beside.
+		return SeverityFail
 	}
 	return SeverityWarn
 }
@@ -96,7 +104,7 @@ func Classes() []Class {
 		ClassPolicyVersion,
 		ClassModelProvider, ClassPromptTemplateHash, ClassPromptVariables,
 		ClassRetrievalIndexID, ClassRetrievalChunker, ClassPolicyGuardrailsHash,
-		ClassCapturePath,
+		ClassCapturePath, ClassToolDescription,
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i] < all[j] })
 	return all
@@ -360,7 +368,34 @@ func compareTools(base, head *manifest.Manifest, opts Options, res *Result) {
 					After:    short(a.SchemaHash),
 				})
 			}
-			if delta := a.DescriptionTokens - b.DescriptionTokens; delta != 0 {
+			// The hash is the signal; the token delta is detail on the same entry, not a
+			// second entry. A description can be rewritten entirely without changing its
+			// length, and that case used to produce no entry at all.
+			beforeHash, afterHash := "", ""
+			if b.DescriptionHash != nil {
+				beforeHash = *b.DescriptionHash
+			}
+			if a.DescriptionHash != nil {
+				afterHash = *a.DescriptionHash
+			}
+			delta := a.DescriptionTokens - b.DescriptionTokens
+			if beforeHash != afterHash {
+				toolsChanged = true
+				detail := ""
+				if delta != 0 {
+					detail = fmt.Sprintf("the description is %d tokens %s", abs(delta), changeWord(delta))
+				}
+				res.Entries = append(res.Entries, Entry{
+					Class:    ClassToolDescription,
+					Severity: opts.severityFor(ClassToolDescription),
+					Summary:  fmt.Sprintf("the description of tool %q changed", name),
+					Before:   short(beforeHash),
+					After:    short(afterHash),
+					Detail:   detail,
+				})
+			} else if delta != 0 {
+				// Same text, different count means the estimate changed under the same
+				// description, which is a capture bug rather than an edit.
 				toolsChanged = true
 				res.Entries = append(res.Entries, Entry{
 					Class:    ClassToolDescriptionTokens,
@@ -374,7 +409,7 @@ func compareTools(base, head *manifest.Manifest, opts Options, res *Result) {
 		}
 	}
 	if !toolsChanged {
-		res.Unchanged = append(res.Unchanged, ClassTools, ClassToolDescriptionTokens)
+		res.Unchanged = append(res.Unchanged, ClassTools, ClassToolDescriptionTokens, ClassToolDescription)
 	}
 }
 
