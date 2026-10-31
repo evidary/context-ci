@@ -16,6 +16,7 @@
 | Who buys it and who blocks it | [02-market/market-and-competitors.md](02-market/market-and-competitors.md) §4 |
 | What exactly we build, in scope and out | [03-product/spec.md](03-product/spec.md) |
 | The manifest format | [03-product/spec.md](03-product/spec.md) §4 |
+| Every flag, exit code and configuration key | [03-product/cli-reference.md](03-product/cli-reference.md) |
 | What happens in the first 30 days | [04-plan/30-day-launch.md](04-plan/30-day-launch.md) |
 | What happens in weeks 5–15 | [04-plan/module-plan.md](04-plan/module-plan.md) |
 | When we decide to charge money | [04-plan/module-plan.md](04-plan/module-plan.md) §10 and §14 |
@@ -36,6 +37,7 @@
 | [01-thesis.md](01-thesis.md) | The bet, the evidence, the buyer, the wedge, the four things that must be true, and the honest failure case | Current |
 | [02-market/market-and-competitors.md](02-market/market-and-competitors.md) | 45 competitor dossiers in five segments, 61 sources, pricing landscape, open-source conversion analysis, distribution, structural gap, ten failure modes | **Dated 29 Oct 2026** |
 | [03-product/spec.md](03-product/spec.md) | Scope, non-goals, the manifest schema, CLI surface, CI integration, requirements, acceptance tests, pricing | Current |
+| [03-product/cli-reference.md](03-product/cli-reference.md) | The implemented verbs, every flag, the exit-code contract, the full configuration schema and the rules that are enforced rather than documented | Current |
 | [04-plan/30-day-launch.md](04-plan/30-day-launch.md) | Week-by-week to a public v0.1: foundation, runner and CI, attribution, launch | Current |
 | [04-plan/module-plan.md](04-plan/module-plan.md) | The full 15-week plan: scope, architecture, workstreams, sprints, pricing, metrics, risks, gates | Current, reframed for standalone |
 | [05-contracts/README.md](05-contracts/README.md) | What we consume from `acp-core`, what we publish, and the vendoring rule | Current |

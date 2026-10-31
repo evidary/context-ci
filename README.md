@@ -4,7 +4,7 @@
 
 Context CI records the exact context an AI feature ran with, diffs it semantically between commits, and attributes quality, safety and cost regressions to the specific change that caused them. It runs in your CI, on your keys, with no account required.
 
-**Status:** pre-code. 30-day build starts **17 November 2026**; open-source launch **16 December 2026**.
+**Status:** CLI working — `manifest`, `diff`, `check` implemented and tested. 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---

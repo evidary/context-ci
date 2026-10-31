@@ -4,6 +4,61 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [0.1.0-dev] — 2026-10-31
+
+The first working CLI. Three of the four specified verbs are implemented, tested
+and exercised end to end against a real git checkout.
+
+### Added
+
+- **`context-ci manifest`** writes `context-manifest.json` for a checkout, with a
+  digest over a canonical form that excludes `created_at`. `--commit` defaults to
+  `git rev-parse HEAD` and the command fails rather than inventing a value, because
+  a manifest with no commit cannot be reproduced.
+- **`context-ci diff`** classifies changes into the ten behavioural classes the
+  specification names, plus seven extras, each with the severity the specification
+  assigns. Needs no configuration file: comparing two manifests should never
+  require setup.
+- **`context-ci check`** gates on the result and exits 1 only for a change at or
+  above `gate.fail_on`. `--baseline` is required, because a gate that silently
+  passes when it had nothing to compare is the most dangerous default available.
+- **`context-ci classes`** lists every class and its default severity, so an
+  override can be written without guessing.
+- `internal/manifest` — the manifest model, strict validation, and RFC 8785-style
+  canonicalisation with UTF-16 key ordering and no floats.
+- `internal/capture` — builds a manifest from a checkout: hashes sources with CRLF
+  normalised to LF, refuses paths outside the repository, strips credential-shaped
+  fields from tool schemas, and records why when no rendered sample was supplied.
+- `internal/config` — `.context-ci.yaml`, parsed with unknown fields rejected and
+  sampling values kept as their literal text so the digest never depends on how a
+  parser represents a number.
+- [ADR-0002](docs/07-decisions/adr-0002-implementation-language.md) — Go for the
+  CLI, Python and TypeScript for the capture SDKs. No language had been decided
+  anywhere in the repository.
+- [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) — the
+  implemented surface, the exit-code contract and the full configuration schema.
+
+### Decisions worth recording
+
+- **`prompt.template_hash` defaults to warn, not fail.** Editing a prompt is the
+  most common deliberate change in this audience. A default that failed every one
+  of them would be switched off within a week, and then nothing would be gated.
+  A test locks this.
+- **`capture.sources` uses `retrieval`, not an invented key.** An early
+  implementation drifted from the specification's example configuration; the
+  mismatch was caught by a test and the code was moved to match the document.
+- **`description_tokens` is a whitespace-word estimate**, documented as an estimate.
+  A cost projection with no configured price reports tokens and no dollars, because
+  an invented price is worse than an absent figure.
+
+### Not yet implemented
+
+`attribute`, SARIF and JUnit output, the GitHub Action wrapper, prompt registries as
+a source, and the two capture SDKs. Listed in
+[docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) §8.
+
+---
+
 ## [1.0.0-docs] — 2026-10-29
 
 **Repository created.** No product code yet. This entry records the repository bootstrap so the first real release has a baseline.
