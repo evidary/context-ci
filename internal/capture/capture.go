@@ -178,21 +178,28 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture: resolve %s: %w", rel, err)
 	}
-	// A clean path comparison is not enough on a filesystem with symbolic links: a
-	// link inside the repository can point anywhere, and reading through it would
-	// hash a file the operator never agreed to expose. Resolve both sides first. A
-	// missing target makes EvalSymlinks fail, which is fine: the read then fails
-	// with a clearer error than a containment message.
-	if real, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
-		resolvedRoot = real
+	// A clean path comparison is not enough on a filesystem with symbolic links or
+	// Windows junctions: a link inside the repository can point anywhere, and reading
+	// through it would hash a file the operator never agreed to expose.
+	//
+	// Resolution is strict. It used to ignore the error and fall back to the unresolved
+	// path, which is fail-open: when EvalSymlinks could not resolve a component - a
+	// junction, a permission the process lacks, a path the platform cannot canonicalise
+	// - the containment check compared two strings that both looked inside the root and
+	// the read then followed the link. A missing target is an error here, which is the
+	// same outcome as before, with a clearer message.
+	realRoot, err := filepath.EvalSymlinks(resolvedRoot)
+	if err != nil {
+		return nil, fmt.Errorf("capture: resolve root: %w", err)
 	}
-	if real, err := filepath.EvalSymlinks(resolved); err == nil {
-		resolved = real
+	realTarget, err := filepath.EvalSymlinks(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("capture: resolve %s: %w", rel, err)
 	}
-	if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(filepath.Separator)) {
+	if realTarget != realRoot && !strings.HasPrefix(realTarget, realRoot+string(filepath.Separator)) {
 		return nil, ErrOutsideRoot{Path: rel}
 	}
-	return os.ReadFile(resolved)
+	return os.ReadFile(realTarget)
 }
 
 var variablePattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}`)

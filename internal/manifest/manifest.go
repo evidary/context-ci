@@ -262,12 +262,23 @@ func (m *Manifest) Validate() error {
 	return nil
 }
 
+// isSHA256Hex accepts lowercase hex only.
+//
+// hex.DecodeString accepts uppercase, so a manifest could carry the same hash in two
+// spellings: both validated, but they compare unequal, so a baseline and a head that
+// describe the same context reported a change, and two spellings of one digest were
+// two different strings in the canonical form. One spelling, enforced at the door.
 func isSHA256Hex(s string) bool {
 	if len(s) != 64 {
 		return false
 	}
-	_, err := hex.DecodeString(s)
-	return err == nil
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Canonicalise serialises a document the one way the specification permits, so

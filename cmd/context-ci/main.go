@@ -366,6 +366,12 @@ func readManifest(path string) (*manifest.Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("%s is not a manifest: %w", path, err)
 	}
+	// Anything after the first document is unread by this decoder, so a file could
+	// hold a manifest and a second value that some other reader would trust. Refusing
+	// the trailing bytes keeps every reader looking at the same document.
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("%s holds more than one JSON document, so different readers would see different manifests", path)
+	}
 	stored := m.Digest
 	recomputed, err := m.Compute()
 	if err != nil {

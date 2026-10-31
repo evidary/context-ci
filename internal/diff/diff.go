@@ -13,6 +13,7 @@
 package diff
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -448,20 +449,23 @@ func paramsFingerprint(p manifest.ModelParam) string {
 	return strings.Join(parts, " ")
 }
 
+// variablesFingerprint renders the map unambiguously.
+//
+// The previous version joined "name:value" pairs with spaces, which collided:
+// {"a": "1 b:2"} and {"a": "1", "b": "2"} both produced "a:1 b:2", so a real change to
+// the prompt variables was reported as unchanged and the gate exited 0. JSON encoding
+// sorts map keys and quotes every value, so no value can forge a separator.
 func variablesFingerprint(v map[string]string) string {
 	if len(v) == 0 {
 		return "none"
 	}
-	names := make([]string, 0, len(v))
-	for name := range v {
-		names = append(names, name)
+	b, err := json.Marshal(v)
+	if err != nil {
+		// A map of strings cannot fail to encode. If it ever does, returning a value
+		// that cannot equal another manifest's is safer than returning one that might.
+		return "unencodable:" + fmt.Sprint(len(v))
 	}
-	sort.Strings(names)
-	out := make([]string, 0, len(names))
-	for _, n := range names {
-		out = append(out, n+":"+v[n])
-	}
-	return strings.Join(out, " ")
+	return string(b)
 }
 
 func contentHint(base, head *manifest.Manifest, kind string) string {

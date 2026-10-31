@@ -9,6 +9,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -145,6 +146,18 @@ func Parse(raw []byte) (*Config, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
+	}
+	// A second document in the same file was ignored, so the half of the file that was
+	// read could disagree with the half that was written - and the tools file now
+	// refuses that, so leaving config permissive would make the two disagree on one
+	// rule.
+	var extra any
+	if err := dec.Decode(&extra); err != nil {
+		if !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("config: %w", err)
+		}
+	} else {
+		return nil, errors.New("config: the file holds more than one YAML document")
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
