@@ -32,7 +32,7 @@ Launch a credible open-source Context CI project that:
 
 | Person | Role | Owns |
 |---|---|---|
-| Engineer 1 | CLI/Manifest | `contextci init/snapshot/diff`, schema, config |
+| Engineer 1 | CLI/Manifest | `contextci manifest` (the snapshot), `diff`, `check`, `classes`; schema and config. `init` does not exist yet — see the note below |
 | Engineer 2 | Runner/Diff | Semantic diff, golden-set runner, assertions |
 | Engineer 3 | CI/Action | GitHub Action, PR annotations, examples |
 | Engineer 4 | Attribution/Docs | Failure attribution, docs, tests, release |
@@ -65,6 +65,12 @@ Launch a credible open-source Context CI project that:
 
 ---
 
+**Verb names.** This plan was written before the CLI existed and used `init` and
+`snapshot`. The implemented surface is `manifest`, `diff`, `check` and `classes`, documented
+in [cli-reference.md](../03-product/cli-reference.md). `init` — writing a starter config —
+is not implemented; a team writes `.contextci.yaml` by hand today, and adding `init` is in
+scope for this 30-day plan. Where this document says "snapshot", read `manifest`.
+
 ## 4. Week-by-week plan
 
 ### Week 1 (17–23 Nov 2026) — Foundation
@@ -82,7 +88,7 @@ Launch a credible open-source Context CI project that:
 | 5 | Security threat model v0 | Security | Reviewed |
 | 5 | Weekly demo | All | Working CLI |
 
-**Deliverable:** `contextci snapshot/diff` works on the example repo.
+**Deliverable:** `contextci manifest` and `contextci diff` work on the example repo.
 
 ### Week 2 (24–30 Nov 2026) — Runner and CI
 
