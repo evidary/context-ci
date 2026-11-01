@@ -194,7 +194,19 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 	}
 	realTarget, err := filepath.EvalSymlinks(resolved)
 	if err != nil {
-		return nil, fmt.Errorf("capture: resolve %s: %w", rel, err)
+		// A path that exists but cannot be canonicalised is a symlink or junction the
+		// platform will not resolve through - on Windows, EvalSymlinks returns a
+		// junction unchanged and fails outright on a path below one. os.ReadFile would
+		// follow it, so the read is refused rather than performed on a path that cannot
+		// be shown to stay inside the root. Distinguishing "exists but unresolvable"
+		// from "does not exist" matters: the first is a security refusal and the second
+		// is a typo, and they used to produce the same message.
+		if _, lerr := os.Lstat(resolved); lerr == nil {
+			return nil, fmt.Errorf(
+				"capture: %s exists but cannot be resolved to a real path (%v); a symlink or junction is refused because it cannot be shown to stay inside %s",
+				rel, err, root)
+		}
+		return nil, fmt.Errorf("capture: %s does not exist: %w", rel, err)
 	}
 	if realTarget != realRoot && !strings.HasPrefix(realTarget, realRoot+string(filepath.Separator)) {
 		return nil, ErrOutsideRoot{Path: rel}
