@@ -48,7 +48,7 @@ Launch a credible open-source Context CI project that:
 ### In scope
 
 - Manifest: prompts, tool schemas, retrieval config, model/params, policies.
-- Capture from repo files + `.contextci.yaml`.
+- Capture from repo files + `.context-ci.yaml`.
 - Semantic diff across versions.
 - Golden-set runner (JSONL/CSV) with assertions.
 - GitHub Action: PR check, annotation, pass/fail.
@@ -68,7 +68,7 @@ Launch a credible open-source Context CI project that:
 **Verb names.** This plan was written before the CLI existed and used `init` and
 `snapshot`. The implemented surface is `manifest`, `diff`, `check` and `classes`, documented
 in [cli-reference.md](../03-product/cli-reference.md). `init` — writing a starter config —
-is not implemented; a team writes `.contextci.yaml` by hand today, and adding `init` is in
+is not implemented; a team writes `.context-ci.yaml` by hand today, and adding `init` is in
 scope for this 30-day plan. Where this document says "snapshot", read `manifest`.
 
 ## 4. Week-by-week plan

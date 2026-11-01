@@ -167,7 +167,7 @@ The 30-day launch is detailed in [30-day-launch.md](30-day-launch.md); this sect
 ### Weeks 1–4 (launch sprint, 17 Nov–16 Dec 2026)
 - 10 interviews with AI platform/DevEx engineers.
 - Competitive teardown (promptfoo, DeepEval, LangSmith, Braintrust).
-- CLI: `init`, `snapshot`, `diff`; manifest store + hashing.
+- CLI: `manifest` (the snapshot), `diff`, `check`, `classes`; manifest store and hashing. `init` is not implemented and is in scope for the 30-day plan.
 - GitHub Action: PR check, annotations; local runner with 10 assertions.
 - Attribution: map changed elements to failing tests.
 - Open-source release; docs; examples; launch post.

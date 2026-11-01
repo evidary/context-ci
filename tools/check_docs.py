@@ -223,6 +223,59 @@ def check_contracts():
         except json.JSONDecodeError as e:
             errors.append("schemas/%s: invalid JSON (%s)" % (f, e))
 
+    # index.json repeats every digest and byte count. It is a second copy, so it goes
+    # stale independently of CHECKSUMS.txt - and it did: the contract moved to 1.0.1 and
+    # the index still described the previous action-record.v1.json, while this gate
+    # skipped the file and reported success. A reader following the index concludes the
+    # published schema is corrupt.
+    check_schema_index(sdir, schemas)
+
+
+def check_schema_index(sdir, schemas):
+    path = os.path.join(sdir, "index.json")
+    if not os.path.exists(path):
+        if schemas:
+            errors.append("schemas/index.json is missing")
+        return
+    try:
+        index = json.load(open(path, encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        errors.append("schemas/index.json: invalid JSON (%s)" % e)
+        return
+
+    entries = index.get("schemas")
+    if not isinstance(entries, list) or not entries:
+        errors.append("schemas/index.json lists no schemas")
+        return
+
+    listed = set()
+    for entry in entries:
+        name = entry.get("file")
+        if not name:
+            errors.append("schemas/index.json has an entry with no file name")
+            continue
+        listed.add(name)
+        target = os.path.join(sdir, name)
+        if not os.path.exists(target):
+            errors.append("schemas/index.json references missing file %s" % name)
+            continue
+        data = open(target, "rb").read()
+        actual = hashlib.sha256(data).hexdigest()
+        if entry.get("sha256") != actual:
+            errors.append("schemas/index.json: %s digest is %s but the file is %s"
+                          % (name, str(entry.get("sha256"))[:12], actual[:12]))
+        if entry.get("bytes") != len(data):
+            errors.append("schemas/index.json: %s says %s bytes but the file is %d"
+                          % (name, entry.get("bytes"), len(data)))
+
+    for f in schemas:
+        if f == "index.json":
+            continue
+        if f not in listed:
+            errors.append("schemas/index.json does not list %s" % f)
+
+
+
 
 def main():
     md_files = []
