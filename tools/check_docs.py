@@ -50,8 +50,20 @@ def rel(p):
     return os.path.relpath(p, ROOT).replace("\\", "/")
 
 
+# CRLF is correct only for these; none are tracked today.
+CRLF_EXEMPT = {".bat", ".cmd", ".ps1"}
+
+
 def check_encoding(path):
     raw = open(path, "rb").read()
+    if b"\r\n" in raw and os.path.splitext(path)[1].lower() not in CRLF_EXEMPT:
+        # A CRLF file behaves differently on Linux: `sha256sum -c` reported every listed
+        # file as unreadable because each name carried a trailing carriage return, while the
+        # local gate -- which parses the same file in Python -- passed.
+        errors.append(
+            "%s: CRLF line endings (normalise to LF; line endings are not portable)"
+            % rel(path)
+        )
     if raw[:3] == b"\xef\xbb\xbf":
         errors.append("%s: UTF-8 BOM present" % rel(path))
     try:
