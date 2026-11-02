@@ -188,7 +188,11 @@ def check_tables(path, text):
     lines = text.splitlines()
 
     def cells(line):
-        return line.strip().strip("|").count("|") + 1
+        # A backslash-escaped pipe is a literal character inside a cell, not a separator.
+        # Counting it as a separator reported correct rows -- shell pipelines and regular
+        # expressions are common in tables -- as malformed.
+        unescaped = re.sub(r"\\\|", "\x00", line)
+        return unescaped.strip().strip("|").count("|") + 1
 
     i = 0
     while i < len(lines):
