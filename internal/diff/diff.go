@@ -18,7 +18,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/context-ci/context-ci/internal/manifest"
+	"github.com/evidary/context-ci/internal/manifest"
 )
 
 // Class names one kind of change. These strings are configuration keys, so they

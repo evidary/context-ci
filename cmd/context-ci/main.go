@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/context-ci/context-ci/internal/capture"
-	"github.com/context-ci/context-ci/internal/config"
-	"github.com/context-ci/context-ci/internal/diff"
-	"github.com/context-ci/context-ci/internal/manifest"
+	"github.com/evidary/context-ci/internal/capture"
+	"github.com/evidary/context-ci/internal/config"
+	"github.com/evidary/context-ci/internal/diff"
+	"github.com/evidary/context-ci/internal/manifest"
 )
 
 // Exit codes. See the package comment.
