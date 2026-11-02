@@ -29,6 +29,16 @@ def main():
             errors.append("%s: missing VENDORED.md" % setname)
             continue
         text = open(manifest, encoding="utf-8").read()
+        declared = re.search(r"\*\*Contract set version:\*\*\s*`?([0-9][^`\s]*)", text)
+        if "@" in setname:
+            name_version = setname.rsplit("@", 1)[1]
+            if not declared:
+                errors.append("%s: VENDORED.md does not state a contract set version" % setname)
+            elif declared.group(1) != name_version:
+                errors.append(
+                    "%s: directory says %s but VENDORED.md says %s"
+                    % (setname, name_version, declared.group(1))
+                )
         recorded = dict(re.findall(r"\|\s*`([^`]+)`\s*\|\s*`([a-f0-9]{64})`\s*\|", text))
         if not recorded:
             errors.append("%s: VENDORED.md records no digests" % setname)

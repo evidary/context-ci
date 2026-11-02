@@ -41,7 +41,7 @@
 | [04-plan/30-day-launch.md](04-plan/30-day-launch.md) | Week-by-week to a public v0.1: foundation, runner and CI, attribution, launch | Current |
 | [04-plan/module-plan.md](04-plan/module-plan.md) | The full 15-week plan: scope, architecture, workstreams, sprints, pricing, metrics, risks, gates | Current, reframed for standalone |
 | [05-contracts/README.md](05-contracts/README.md) | What we consume from `acp-core`, what we publish, and the vendoring rule | Current |
-| [05-contracts/vendor/acp-core@1.0.0/VENDORED.md](05-contracts/vendor/acp-core@1.0.0/VENDORED.md) | Pinned contract copies with SHA-256 digests | Pinned 1.0.0 |
+| [05-contracts/vendor/acp-core@1.0.1/VENDORED.md](05-contracts/vendor/acp-core@1.0.1/VENDORED.md) | Pinned contract copies with SHA-256 digests | Pinned 1.0.0 |
 | [06-operations/squad-and-metrics.md](06-operations/squad-and-metrics.md) | Squad charter, rituals, decision rights, the metrics that matter, and the release process | Current |
 | [07-decisions/README.md](07-decisions/README.md) | Decision register | Current |
 | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) | Why this is its own repository and its own licence, and what it may never depend on | Current |
@@ -55,7 +55,7 @@
 | Not here | Where it is | Why |
 |---|---|---|
 | Platform strategy, pricing, finance | `acp-core:docs/01-strategy/` | Not needed to build this product |
-| The platform's contracts in full | vendored copies in [05-contracts/vendor/](05-contracts/vendor/acp-core@1.0.0/VENDORED.md) | We pin what we consume; we do not carry the whole contract set |
+| The platform's contracts in full | vendored copies in [05-contracts/vendor/](05-contracts/vendor/acp-core@1.0.1/VENDORED.md) | We pin what we consume; we do not carry the whole contract set |
 | Other modules' plans | their own repositories | Separate products, separate buyers |
 | Cross-group research archive | not in any repo | Portfolio context, not build context |
 
