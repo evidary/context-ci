@@ -20,6 +20,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv"}
 LINK = re.compile(r"(!?)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+MALFORMED_LINK = re.compile(r"\[[^\]\n]*\.(?:md|csv|json|ya?ml)[^\]\n]*\)")
 TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 TABLE_SEP = re.compile(r"^\s*\|[\s:\-|]+\|\s*$")
 MOJIBAKE = (
@@ -64,6 +65,30 @@ def check_encoding(path):
     return text
 
 
+def mask_code(text):
+    """Blank out fenced blocks and inline code spans, keeping line structure intact.
+
+    A `[label](path)` inside backticks is shown, not followed. Masking it keeps the line
+    count the same so reported line numbers stay correct, and lets the two link checks run
+    over the prose only.
+    """
+    out = []
+    fenced = False
+    for line in text.splitlines(True):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            fenced = not fenced
+            out.append("\n" if line.endswith("\n") else "")
+            continue
+        if fenced:
+            out.append("\n" if line.endswith("\n") else "")
+            continue
+        # Inline spans: replace each `...` run with spaces of the same length.
+        masked = re.sub(r"`[^`\n]*`", lambda m: " " * len(m.group(0)), line)
+        out.append(masked)
+    return "".join(out)
+
+
 def check_links(path, text):
     """Resolve every local link, including its fragment.
 
@@ -75,7 +100,7 @@ def check_links(path, text):
     is broken in the same way a missing file is, so it is now reported too.
     """
     base = os.path.dirname(path)
-    for m in LINK.finditer(text):
+    for m in LINK.finditer(mask_code(text)):
         target = m.group(2).strip()
         if target.startswith(("http://", "https://", "mailto:")):
             continue
@@ -99,29 +124,58 @@ def check_links(path, text):
                               % (rel(path), m.group(2)))
 
 
+
+# The punctuation github-slugger removes before turning spaces into hyphens: the general
+# punctuation block, the supplemental punctuation block, and ASCII punctuation.
+GITHUB_PUNCT = re.compile(
+    "[\\u2000-\\u206F\\u2E00-\\u2E7F\\\\'!\"#$%&()*+,./:;<=>?@\\[\\]^`{|}~]"
+)
+
 def slugify_heading(line):
     """Turn a markdown heading into the anchor form GitHub generates.
 
-    Lowercase, drop anything that is not a letter, digit, space, hyphen or underscore,
-    then join words with hyphens. Close enough for this repository's headings, which is
-    where the check is applied.
+    GitHub lowercases, trims, deletes a fixed set of punctuation, then replaces *each*
+    remaining space with a hyphen. Replacing each space matters: a heading with an em dash
+    loses the dash but keeps both neighbouring spaces, so it produces two hyphens in a row.
+    Collapsing runs of whitespace into one hyphen -- what this function used to do -- made
+    every such anchor look missing.
     """
     text = line.strip().lstrip("#").strip().lower()
-    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
-    text = re.sub(r"\s+", "-", text.strip())
-    return text
+    text = GITHUB_PUNCT.sub("", text)
+    return text.replace(" ", "-")
 
 
 
 
 def anchors_in(path):
     found = set()
+    seen = {}
     for line in open(path, encoding="utf-8"):
         if line.lstrip().startswith("#"):
-            found.add(slugify_heading(line))
+            slug = slugify_heading(line)
+            count = seen.get(slug, 0)
+            seen[slug] = count + 1
+            # GitHub disambiguates repeats by appending -1, -2, ...
+            found.add(slug if count == 0 else "%s-%d" % (slug, count))
     return found
 
 
+
+
+def check_link_syntax(path, text):
+    """Catch a bracket that names a file but is never closed into a link.
+
+    `[label](target.md)` is checked by check_links. `[label../target.md)` is not a link at
+    all -- it renders as ordinary text with a stray parenthesis -- so check_links cannot see
+    it, and a file full of them passes. That is exactly what a careless find-and-replace
+    produces, which is why this rule exists.
+    """
+    for number, line in enumerate(mask_code(text).splitlines(), 1):
+        if MALFORMED_LINK.search(line):
+            errors.append(
+                "%s:%d: malformed link -- '[' is never closed into '](' so it renders as "
+                "text" % (rel(path), number)
+            )
 
 
 def check_tables(path, text):
@@ -277,6 +331,35 @@ def check_schema_index(sdir, schemas):
 
 
 
+def check_version_matches_changelog():
+    """VERSION and the newest released CHANGELOG heading must name the same version.
+
+    A number that disagrees with itself costs nothing to prevent and is expensive to
+    discover, because every reader assumes the other one is right.
+    """
+    version_path = os.path.join(ROOT, "VERSION")
+    changelog_path = os.path.join(ROOT, "CHANGELOG.md")
+    if not os.path.exists(version_path) or not os.path.exists(changelog_path):
+        return
+    version = open(version_path, encoding="utf-8").read().strip()
+    newest = None
+    for line in open(changelog_path, encoding="utf-8"):
+        m = re.match(r"^##\s*\[([^\]]+)\]", line)
+        if not m:
+            continue
+        if m.group(1).lower().startswith("unreleased"):
+            continue
+        newest = m.group(1)
+        break
+    if newest is None:
+        errors.append("CHANGELOG.md: no released version heading found")
+    elif newest != version:
+        errors.append(
+            "CHANGELOG.md: newest released version is %s but VERSION says %s"
+            % (newest, version)
+        )
+
+
 def main():
     md_files = []
     total = 0
@@ -288,8 +371,10 @@ def main():
         if path.endswith(".md"):
             md_files.append(path)
             check_links(path, text)
+            check_link_syntax(path, text)
             check_tables(path, text)
     check_index_coverage(md_files)
+    check_version_matches_changelog()
     check_contracts()
 
     print("checked %d files, %d markdown" % (total, len(md_files)))
