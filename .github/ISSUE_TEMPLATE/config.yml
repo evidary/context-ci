@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability privately
+    url: https://github.com/evidary/context-ci/security/advisories/new
+    about: Never open a public issue for a security defect. This form is private to the maintainers.
+  # TODO when the domain is registered: add the security@ mailbox as a second contact. Until the
+  # domain resolves, a mailto here sends reports nowhere, which is worse than no link.
