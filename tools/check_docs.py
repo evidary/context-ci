@@ -89,6 +89,43 @@ def mask_code(text):
     return "".join(out)
 
 
+def escapes_root(path):
+    """True when a resolved path is outside the repository."""
+    root = os.path.realpath(ROOT)
+    target = os.path.realpath(path)
+    try:
+        return os.path.commonpath([root, target]) != root
+    except ValueError:
+        return True
+
+
+def case_mismatch(base, file_part):
+    """Return (wrong, actual) for the first path component spelled differently on disk.
+
+    Windows resolves a link whose case is wrong and Linux does not, so the gate compares the
+    link against the directory entries instead of trusting os.path.exists.
+    """
+    current = base
+    for part in file_part.replace("\\", "/").split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            current = os.path.dirname(current)
+            continue
+        try:
+            entries = os.listdir(current)
+        except OSError:
+            return None
+        if part in entries:
+            current = os.path.join(current, part)
+            continue
+        lowered = {e.lower(): e for e in entries}
+        if part.lower() in lowered:
+            return part, lowered[part.lower()]
+        return None
+    return None
+
+
 def check_links(path, text):
     """Resolve every local link, including its fragment.
 
@@ -114,6 +151,19 @@ def check_links(path, text):
             resolved = os.path.normpath(os.path.join(base, file_part))
             if not os.path.exists(resolved):
                 errors.append("%s: broken link -> %s" % (rel(path), m.group(2)))
+                continue
+            if escapes_root(resolved):
+                errors.append(
+                    "%s: link leaves the repository -> %s (a reader who clones this repo "
+                    "cannot follow it)" % (rel(path), m.group(2))
+                )
+                continue
+            mismatch = case_mismatch(base, file_part)
+            if mismatch:
+                errors.append(
+                    "%s: link case does not match the file -> %s (on disk it is %r; Linux "
+                    "resolves nothing else)" % (rel(path), m.group(2), mismatch[1])
+                )
                 continue
         else:
             resolved = path
