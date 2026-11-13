@@ -158,6 +158,9 @@ scope for this 30-day plan. Where this document says "snapshot", read `manifest`
       logged out, then the GitLab and CircleCI snippets in [spec §7](../03-product/spec.md). Until the
       repository is public an outsider cannot install at all — measured 13 Nov 2026 — so acceptance tests
       11.1 and 11.3 are blocked on this one action, not on more code.
+- [ ] Publish both capture SDKs (`context-ci-capture` on PyPI, `@evidary/context-ci` on npm). Both build
+      and install cleanly as of 13 Nov 2026 — wheel into a venv, tarball into an empty project — so this
+      is a publishing step, not a code one.
 - [ ] Demo video/GIF and example repo.
 - [ ] GitHub Action published to Marketplace (or documented).
 - [ ] Release tagged, signed, SBOM.

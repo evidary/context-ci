@@ -172,7 +172,7 @@ Rules:
 GitHub Actions, through the wrapper in [`action.yml`](../../action.yml):
 
 ```yaml
-- uses: evidary/context-ci/action@v0.4.1
+- uses: evidary/context-ci/action@v0.4.2
   with:
     command: check              # manifest | check
     baseline: context-manifest.json
@@ -193,7 +193,7 @@ context-ci:
   variables:
     GOBIN: $CI_PROJECT_DIR/bin
   script:
-    - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
+    - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.2
     # The baseline is the manifest committed on the target branch, not a re-render of it: a
     # baseline regenerated at compare time would agree with whatever it was generated from.
     # The refspec is explicit because a CI clone is usually single-branch, and `git fetch origin
@@ -220,7 +220,7 @@ jobs:
       - checkout
       - run:
           name: Install context-ci
-          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
+          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.2
       - run:
           name: Baseline from the base branch
           command: |

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-ci-capture"
+version = "0.1.0"
+description = "Capture the prompt your application actually sends, for context-ci instrumented manifests."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+keywords = ["context-ci", "llm", "prompt", "ci", "capture"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/evidary/context-ci"
+
+[tool.setuptools]
+# The package is one file with no dependencies. Listing it explicitly keeps the wheel honest about
+# what it contains.
+packages = ["context_ci"]

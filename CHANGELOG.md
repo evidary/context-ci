@@ -8,6 +8,22 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 Nothing yet.
 
+## [0.4.2] — 2026-11-13
+
+### Fixed
+
+- **The npm package would have shipped with no code in it.** `dist/` is gitignored, and nothing built
+  it at pack time, so `npm pack` from a clean checkout produced a tarball containing only
+  `package.json` and the README — a package whose every import fails. `prepack` now builds. Proved by
+  packing from a clean tree, installing the tarball into an empty project, importing it, type-checking
+  a TypeScript consumer with `tsc --strict`, and feeding the capture it wrote to the installed CLI,
+  which produced an instrumented manifest.
+- **The Python SDK was not installable.** There was no `pyproject.toml`, so `pip install` had nothing
+  to build and the distribution name in the changelog did not exist. It now builds a wheel
+  (`context-ci-capture`), proved by installing it into a clean venv with `--no-index` and capturing
+  through the installed module. Four tests keep the metadata honest: the declared version matches
+  `__version__`, there are no runtime dependencies, and the README says how to install.
+
 ## [0.4.1] — 2026-11-13
 
 ### Fixed

@@ -4,7 +4,7 @@
 
 Context CI records the exact context an AI feature ran with, diffs it semantically between commits, and attributes quality, safety and cost regressions to the specific change that caused them. It runs in your CI, on your keys, with no account required.
 
-**Status:** v0.4.1 tagged. `manifest`, `diff`, `check`, `attribute` and `classes` are implemented and tested; `action.yml` runs the gate as a GitHub Action; output is available as text, GitHub annotations, JSON, SARIF and JUnit; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Status:** v0.4.2 tagged. `manifest`, `diff`, `check`, `attribute` and `classes` are implemented and tested; `action.yml` runs the gate as a GitHub Action; output is available as text, GitHub annotations, JSON, SARIF and JUnit; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---
@@ -35,7 +35,7 @@ Context CI makes that diff exist.
 
 ```yaml
 # .github/workflows/context.yml
-- uses: evidary/context-ci/action@v0.4.1
+- uses: evidary/context-ci/action@v0.4.2
   with:
     command: check
     baseline: context-manifest.json

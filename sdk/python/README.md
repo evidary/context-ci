@@ -10,6 +10,7 @@ capture(rendered=prompt, template=TEMPLATE, path="context-capture.json")
 ```
 
 ```bash
+pip install ./sdk/python          # or: pip install context-ci-capture, once published
 context-ci manifest --capture context-capture.json
 ```
 
