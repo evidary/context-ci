@@ -92,11 +92,12 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("manifest", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		configPath = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
-		root       = fs.String("root", ".", "repository root to capture")
-		out        = fs.String("out", "", "output path (default stdout)")
-		commit     = fs.String("commit", "", "commit to record (default: git HEAD)")
-		sdkVer     = fs.String("sdk-version", "", "SDK version, for instrumented capture")
+		configPath  = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
+		root        = fs.String("root", ".", "repository root to capture")
+		out         = fs.String("out", "", "output path (default stdout)")
+		commit      = fs.String("commit", "", "commit to record (default: git HEAD)")
+		sdkVer      = fs.String("sdk-version", "", "SDK version, for instrumented capture")
+		captureFile = fs.String("capture", "", "a capture file written by an SDK, for instrumented capture")
 	)
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
@@ -121,11 +122,20 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	m, err := capture.Build(cfg, *root, capture.Options{
+	options := capture.Options{
 		Commit:     resolvedCommit,
 		Now:        time.Now(),
 		SDKVersion: *sdkVer,
-	})
+	}
+	if *captureFile != "" {
+		observed, err := capture.LoadObserved(*captureFile)
+		if err != nil {
+			fmt.Fprintf(stderr, "manifest: %v\n", err)
+			return ExitManifest
+		}
+		options.Observed = observed
+	}
+	m, err := capture.Build(cfg, *root, options)
 	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return ExitManifest

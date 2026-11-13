@@ -8,6 +8,32 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 Nothing yet.
 
+## [0.3.0] — 2026-11-13
+
+### Added
+
+- **Instrumented capture, end to end.** `sdk/python` (`context-ci-capture`, no dependencies) writes
+  a capture file at request-assembly time; `context-ci manifest --capture <file>` turns it into a
+  manifest with `capture.path: instrumented`, the SDK's version recorded, and `rendered_hash` the
+  digest of the text actually sent. `rendered_sample_hash` stays null, because a live capture is
+  not a sample.
+- The capture format is five fields and no more: `capture_version`, `sdk`, `sdk_version`,
+  `rendered`, and optional `template`. Tools, retrieval and policy still come from the
+  configuration — recording them twice would create two sources of truth for one fact.
+- **Variable values are deliberately not captured.** The manifest records types, as it does for
+  asserted capture, because a manifest is a file teams commit and share; the rendered text already
+  contains the values, and copying them in would turn a hash into a leak.
+- Loading refuses unknown fields, an empty rendered prompt, a missing SDK version and a prompt over
+  4 MiB, in both languages. A capture that would produce a valid-looking manifest with an empty
+  prompt hash is the failure mode this feature exists to avoid.
+- `capture_messages()` joins a chat-style message list one documented way, so callers holding
+  messages do not each invent their own join.
+
+### Note
+
+The TypeScript SDK is not written. §8 of the CLI reference says so rather than leaving the row
+looking complete.
+
 ## [0.2.0] — 2026-11-13
 
 ### Added

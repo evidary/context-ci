@@ -41,6 +41,10 @@ type Options struct {
 	Now time.Time
 	// SDKVersion is recorded when the capture path is instrumented.
 	SDKVersion string
+	// Observed, when set, is the rendered prompt an SDK saw at request time. It replaces the
+	// file-hashed rendered prompt and marks the capture path instrumented. It exists because the
+	// rendered text is the one thing a configuration file cannot know.
+	Observed *Observed
 }
 
 // ErrOutsideRoot is returned for a source path that escapes the repository.
@@ -110,7 +114,18 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 		},
 	}
 
-	if rendered, ok := hashes[config.SourceRendered]; ok {
+	if opts.Observed != nil {
+		// The rendered prompt came from the SDK, so the capture path is instrumented by
+		// definition: no file in the repository holds this text.
+		m.Capture.Path = "instrumented"
+		m.Capture.SDKVersion = opts.Observed.SDKVersion
+		m.Capture.Reason = ""
+		m.Prompt.RenderedHash = hashString(opts.Observed.Rendered)
+		m.Prompt.RenderedSampleHash = nil
+		if opts.Observed.Template != "" {
+			m.Prompt.TemplateHash = hashString(opts.Observed.Template)
+		}
+	} else if rendered, ok := hashes[config.SourceRendered]; ok {
 		m.Prompt.RenderedHash = rendered
 		m.Prompt.RenderedSampleHash = &rendered
 	} else {
@@ -437,4 +452,10 @@ func optional(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// hashString is the digest the manifest records for a body of text.
+func hashString(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }

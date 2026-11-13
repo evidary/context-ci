@@ -48,8 +48,19 @@ results format settled first, so it is deliberately last.
 
 ```bash
 context-ci manifest [--config .context-ci.yaml] [--root .] [--out path] \
-                    [--commit <sha>] [--sdk-version <ver>]
+                    [--commit <sha>] [--sdk-version <ver>] [--capture <file>]
 ```
+
+`--capture` reads a file written by an SDK at request-assembly time (see
+[sdk/python](../../sdk/python/README.md)) and produces an **instrumented** manifest: `capture.path`
+becomes `instrumented`, `capture.sdk_version` records which SDK produced it, and `rendered_hash`
+becomes the digest of the text that was actually sent rather than of a file in the repository.
+`rendered_sample_hash` is left null, because a live capture is not a sample.
+
+The capture supplies the rendered prompt and, when it has it, the template. Tools, retrieval and
+policy still come from the configuration: they are configuration, and recording them twice would
+create two sources of truth for the same fact. Variable *values* are never taken from a capture —
+the manifest records types, because it is a file teams commit and share.
 
 With no `--out`, the manifest goes to stdout and a one-line summary goes to stderr,
 so `context-ci manifest > context-manifest.json` behaves.
@@ -274,4 +285,4 @@ reports and fails at once cannot be used to explain a build that already failed.
 | `--format sarif`, `--format junit` | Chosen output not yet decided (spec §12 question 3) | Before v0.1 |
 | The GitHub Action wrapper | `action.yml` around the binary | Before v0.1 |
 | Prompt registries as a source | Spec §12 question 2 | After v0.1 |
-| Python and TypeScript capture SDKs | `instrumented` capture needs them | Before v0.1 |
+| The TypeScript capture SDK | Python exists; TypeScript does not | Before v0.1 |
