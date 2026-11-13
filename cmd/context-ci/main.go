@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -85,8 +86,34 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-// version is set from the VERSION file at release time; "dev" otherwise.
-var version = "dev"
+// version is set at build time by the release workflow. It is empty in every other build, and
+// filled in from the module version the toolchain recorded, so a binary installed with
+// `go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1` reports that version instead of
+// "dev". A tool that cannot say which version it is cannot be quoted in a bug report, and its SARIF
+// results carry a tool version that means nothing to a consumer that dedupes by it.
+var version = ""
+
+func init() {
+	module := ""
+	if info, ok := debug.ReadBuildInfo(); ok {
+		module = info.Main.Version
+	}
+	version = resolveVersion(version, module)
+}
+
+// resolveVersion prefers the linked value, because the release workflow knows the version of the
+// tree it tagged; otherwise the module version decides. Go stamps a build inside a checkout with
+// the nearest tag, so a local build reports e.g. "0.4.0+dirty"; "(devel)" is what it records when
+// there is no VCS to ask, and "dev" is the honest answer there.
+func resolveVersion(linked, module string) string {
+	if linked != "" {
+		return linked
+	}
+	if module == "" || module == "(devel)" {
+		return "dev"
+	}
+	return strings.TrimPrefix(module, "v")
+}
 
 func runManifest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("manifest", flag.ContinueOnError)

@@ -8,6 +8,28 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 Nothing yet.
 
+## [0.4.1] — 2026-11-13
+
+### Fixed
+
+- **An installed binary reported `dev`.** `go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0`
+  — the command in the action, the README and both CI snippets — builds without the release
+  workflow's ldflags, so `context-ci version` printed `dev` and SARIF's `tool.driver.version` was
+  `dev` for every user who installed it the documented way. The version now falls back to the module
+  version the Go toolchain records in the binary, which for that command is the tag. A build inside
+  a checkout reports the nearest tag (`0.4.1`, or `0.4.1+dirty` with local changes); only a build
+  with no VCS to ask reports `dev`.
+- The release workflow's own verification step compared the binary's output against
+  `context-ci v$(cat VERSION)` while the build injected `VERSION`, so the check could never pass.
+  It now compares like with like, and v0.4.1 is the first release where that step can succeed.
+
+### Note
+
+Measured, not assumed: `go install ...@v0.4.0` needs credentials to this repository, because it is
+private until launch. Anonymous installs fail at `git ls-remote` with *could not read Username*. That
+is a visibility decision, not a code defect, and it is recorded with a date in
+[docs/03-product/spec.md](docs/03-product/spec.md) §7.
+
 ## [0.4.0] — 2026-11-13
 
 ### Added

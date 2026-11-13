@@ -22,7 +22,7 @@ In a pull request:
   with: { fetch-depth: 0 }
 - uses: actions/setup-go@v5
   with: { go-version: "1.27" }
-- uses: evidary/context-ci/action@v0.1.0
+- uses: evidary/context-ci/action@v0.4.1
   with:
     baseline: context-manifest.base.json
     format: github      # annotations on the diff

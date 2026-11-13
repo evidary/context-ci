@@ -7,7 +7,7 @@ branding:
 
 # A composite action rather than a Docker or JavaScript one: the tool is a single static Go
 # binary, and a container would add a pull to every job that uses it. The version input defaults
-# to this action's own tag, so `uses: evidary/context-ci/action@v0.1.0` runs the binary built
+# to this action's own tag, so `uses: evidary/context-ci/action@v0.4.1` runs the binary built
 # from the same commit as the action.
 
 inputs:

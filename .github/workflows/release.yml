@@ -62,7 +62,7 @@ jobs:
       - name: The binary must report the version it was built from
         run: |
           # Only the host target can be executed here; the rest are cross-compiled and unchecked.
-          want="context-ci v$(cat VERSION)"
+          want="context-ci $(cat VERSION)"
           got="$(./dist/context-ci_linux_amd64 version)"
           echo "reported: $got"
           if [ "$got" != "$want" ]; then

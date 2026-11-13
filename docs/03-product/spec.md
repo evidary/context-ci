@@ -172,7 +172,7 @@ Rules:
 GitHub Actions, through the wrapper in [`action.yml`](../../action.yml):
 
 ```yaml
-- uses: evidary/context-ci/action@v0.4.0
+- uses: evidary/context-ci/action@v0.4.1
   with:
     command: check              # manifest | check
     baseline: context-manifest.json
@@ -193,7 +193,7 @@ context-ci:
   variables:
     GOBIN: $CI_PROJECT_DIR/bin
   script:
-    - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0
+    - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
     # The baseline is the manifest committed on the target branch, not a re-render of it: a
     # baseline regenerated at compare time would agree with whatever it was generated from.
     - git fetch --depth 1 origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
@@ -218,7 +218,7 @@ jobs:
       - checkout
       - run:
           name: Install context-ci
-          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0
+          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
       - run:
           name: Baseline from the base branch
           command: git show "origin/main:context-manifest.json" > baseline.json
