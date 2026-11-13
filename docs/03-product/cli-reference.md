@@ -15,6 +15,23 @@ context-ci manifest          # writes context-manifest.json for this checkout
 
 That is the whole quickstart. No account, no network call, no secret.
 
+In a pull request:
+
+```yaml
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }
+- uses: actions/setup-go@v5
+  with: { go-version: "1.27" }
+- uses: evidary/context-ci/action@v0.1.0
+  with:
+    baseline: context-manifest.base.json
+    format: github      # annotations on the diff
+```
+
+The action installs the binary with `go install` at its own tag, so what runs is the binary
+built from the commit the action names. `check` without a baseline fails rather than passing on
+an empty comparison.
+
 ## 2. The verbs
 
 | Verb | Command | What it does |

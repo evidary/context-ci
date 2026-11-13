@@ -1,0 +1,105 @@
+name: Context CI
+description: Catch the prompt, tool or retrieval change that broke your AI feature, before it merges.
+author: Evidary
+branding:
+  icon: git-pull-request
+  color: purple
+
+# A composite action rather than a Docker or JavaScript one: the tool is a single static Go
+# binary, and a container would add a pull to every job that uses it. The version input defaults
+# to this action's own tag, so `uses: evidary/context-ci/action@v0.1.0` runs the binary built
+# from the same commit as the action.
+
+inputs:
+  command:
+    description: "manifest writes a manifest; check compares two of them and fails the job above the threshold."
+    required: false
+    default: check
+  baseline:
+    description: "Path to the baseline manifest. Required for check: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is."
+    required: false
+    default: ""
+  head:
+    description: "Path to the head manifest. Defaults to context-manifest.json, which this action writes when the file does not exist."
+    required: false
+    default: context-manifest.json
+  config:
+    description: "Path to .context-ci.yaml, for severity overrides."
+    required: false
+    default: ""
+  format:
+    description: "text, github or json. github writes annotations onto the pull request."
+    required: false
+    default: github
+  version:
+    description: "The module version to install. Defaults to this action's ref, which keeps the action and the binary in step."
+    required: false
+    default: ""
+
+outputs:
+  manifest:
+    description: "The manifest path that was written or used."
+    value: ${{ steps.run.outputs.manifest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install context-ci
+      id: install
+      shell: bash
+      # go install, not a downloaded artefact: it needs no release assets, and @version is the
+      # same module proxy any user can verify against the tag.
+      run: |
+        set -euo pipefail
+        version="${{ inputs.version }}"
+        if [ -z "$version" ]; then
+          version="${GITHUB_ACTION_REF:-main}"
+        fi
+        echo "installing context-ci@${version}"
+        go install "github.com/evidary/context-ci/cmd/context-ci@${version}"
+        echo "bin=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: Write the head manifest when it is missing
+      if: ${{ inputs.command == 'check' && inputs.head != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        head="${{ inputs.head }}"
+        [ -e "$head" ] && exit 0
+        echo "no $head: writing one for this checkout"
+        context-ci manifest --out "$head"
+
+    - name: Run
+      id: run
+      shell: bash
+      run: |
+        set -euo pipefail
+        command="${{ inputs.command }}"
+        head="${{ inputs.head }}"
+        echo "manifest=${head}" >> "$GITHUB_OUTPUT"
+        case "$command" in
+          manifest)
+            if [ -n "${{ inputs.config }}" ]; then
+              context-ci manifest --config "${{ inputs.config }}" --out "$head"
+            else
+              context-ci manifest --out "$head"
+            fi
+            ;;
+          check)
+            baseline="${{ inputs.baseline }}"
+            if [ -z "$baseline" ]; then
+              echo "::error::check needs a baseline manifest: pass the baseline input"
+              exit 1
+            fi
+            args=(--baseline "$baseline" --head "$head" --format "${{ inputs.format }}")
+            if [ -n "${{ inputs.config }}" ]; then
+              args+=(--config "${{ inputs.config }}")
+            fi
+            context-ci check "${args[@]}"
+            ;;
+          *)
+            echo "::error::unknown command $command; use manifest or check"
+            exit 1
+            ;;
+        esac

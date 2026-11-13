@@ -1,0 +1,76 @@
+name: release
+
+# Tag-driven, so the tag, the binaries and the checksums describe one commit. The binaries are
+# static: the tool records and compares manifests, and a cgo dependency would make the artefact
+# on a runner different from the one a user builds.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: The tag must name the version in the tree
+        run: |
+          version="$(cat VERSION)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match VERSION $version"
+            exit 1
+          fi
+
+      - name: Build, vet, test
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+      - name: Documentation and contract gates
+        run: |
+          python3 tools/check_docs.py
+          python3 tools/check_vendor.py
+
+      - name: Build the release binaries
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            goos="${target%/*}"; goarch="${target#*/}"
+            name="context-ci_${goos}_${goarch}"
+            [ "$goos" = "windows" ] && name="${name}.exe"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -o "dist/$name" ./cmd/context-ci
+          done
+          ls -l dist
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: The checksums must describe what is attached
+        run: |
+          test -s dist/SHA256SUMS
+          test "$(wc -l < dist/SHA256SUMS)" -eq 5
+          cd dist && sha256sum -c SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "v$(cat VERSION)" \
+            --generate-notes \
+            --verify-tag

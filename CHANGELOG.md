@@ -4,6 +4,30 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [Unreleased]
+
+Nothing yet.
+
+## [0.1.0] — 2026-11-13
+
+### Added
+
+- **`action.yml`**: a composite GitHub Action, so `uses: evidary/context-ci/action@v0.1.0` runs the
+  binary built from the same tag as the action. It installs with `go install` rather than
+  downloading an asset, so there is nothing between the tag and the binary a user can check
+  against. `check` without a baseline fails: a gate that passes because it had nothing to compare
+  is the most dangerous default available.
+- **`.github/workflows/release.yml`**: on a `v*` tag it asserts the tag matches `VERSION`, builds,
+  tests, runs the documentation and contract gates, builds five static targets, writes
+  `SHA256SUMS`, checks the checksums describe what will be attached, and publishes.
+- A `manifest` written by the action is not committed: it is an artefact of the run, and the
+  action says which path it used in its output.
+
+### Note
+
+`0.1.0-dev` never existed as a release; this heading replaces it rather than pretending the dev
+version shipped.
+
 ## [0.1.0-dev] — 2026-10-31
 
 The first working CLI. Three of the four specified verbs are implemented, tested
