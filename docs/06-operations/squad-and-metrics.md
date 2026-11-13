@@ -48,6 +48,19 @@ Four engineers plus DevRel. This is the smallest squad in the program on purpose
 5. Tag `vX.Y.Z`; GitHub release with a short "what changed and why it matters" note.
 6. Announcement only if the release changes behaviour a user would notice.
 
+### What has actually been exercised
+
+`release.yml` is tag-driven, and on 13 November 2026 every step of it except **Publish** was run
+locally in Git Bash with `GITHUB_REF_NAME=v0.4.2`: the tag/VERSION match, build/vet/test, both
+documentation gates, the five cross-target builds with `-X main.version`, the check that the built
+binary reports that version, `SHA256SUMS`, and `sha256sum -c` over all five artefacts. The version
+check was run against the host target (`windows_amd64`) because a `linux_amd64` binary cannot execute
+here; the step is otherwise identical.
+
+**Publish is unverified.** It calls the GitHub API with the workflow token, which is unreachable from
+the development environment — the Actions API answers 404 for this repository, which is private until
+launch. So the honest status is: the pipeline's logic is exercised, the handoff to GitHub is not.
+
 ## 5. Metrics
 
 Two sets, because the open-source product and the business have different scoreboards. Confusing them is how devtools projects convince themselves they are winning.

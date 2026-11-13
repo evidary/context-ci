@@ -24,6 +24,13 @@ Nothing yet.
   through the installed module. Four tests keep the metadata honest: the declared version matches
   `__version__`, there are no runtime dependencies, and the README says how to install.
 
+### Note
+
+Every `release.yml` step except Publish was run locally on this date and passed, including the five
+cross-target builds and `sha256sum -c` over all five artefacts. Publish needs the GitHub API, which
+answers 404 for a private repository. See
+[docs/06-operations/squad-and-metrics.md](docs/06-operations/squad-and-metrics.md) §4.
+
 ## [0.4.1] — 2026-11-13
 
 ### Fixed
