@@ -311,5 +311,5 @@ reports and fails at once cannot be used to explain a build that already failed.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| CI-provider verification | The GitHub, GitLab and CircleCI snippets exist; none has run on a hosted runner. Documented with a date in [spec.md](spec.md) §7 | First outsider report |
+| CI-provider verification | Every snippet's commands are exercised locally, verbatim; none has run on a hosted runner, and no outsider can install at all while the repository is private. Measured and dated in [spec.md](spec.md) §7, with a launch-day item in the [launch plan](../04-plan/30-day-launch.md) | Launch day |
 | Prompt registries as a source | Spec §12 question 2 | After v0.1 |

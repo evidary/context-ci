@@ -22,6 +22,10 @@ Nothing yet.
 - The release workflow's own verification step compared the binary's output against
   `context-ci v$(cat VERSION)` while the build injected `VERSION`, so the check could never pass.
   It now compares like with like, and v0.4.1 is the first release where that step can succeed.
+- **The GitLab snippet did not work.** It fetched with `git fetch --depth 1 origin main`, and in a
+  single-branch CI clone that leaves no `origin/main` behind — only `FETCH_HEAD` — so the next line,
+  `git show origin/main:context-manifest.json`, failed. Both snippets now fetch an explicit refspec.
+  Found by running the snippets verbatim rather than reading them.
 
 ### Note
 

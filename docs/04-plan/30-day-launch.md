@@ -154,6 +154,10 @@ scope for this 30-day plan. Where this document says "snapshot", read `manifest`
 ## 6. Launch checklist
 
 - [ ] Public repo, license, README, docs.
+- [ ] **The moment the repo is public:** run `go install github.com/evidary/context-ci/cmd/context-ci@<tag>`
+      logged out, then the GitLab and CircleCI snippets in [spec §7](../03-product/spec.md). Until the
+      repository is public an outsider cannot install at all — measured 13 Nov 2026 — so acceptance tests
+      11.1 and 11.3 are blocked on this one action, not on more code.
 - [ ] Demo video/GIF and example repo.
 - [ ] GitHub Action published to Marketplace (or documented).
 - [ ] Release tagged, signed, SBOM.

@@ -196,7 +196,9 @@ context-ci:
     - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
     # The baseline is the manifest committed on the target branch, not a re-render of it: a
     # baseline regenerated at compare time would agree with whatever it was generated from.
-    - git fetch --depth 1 origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    # The refspec is explicit because a CI clone is usually single-branch, and `git fetch origin
+    # main` then leaves no origin/main behind — only FETCH_HEAD.
+    - git fetch --depth 1 origin "+refs/heads/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:refs/remotes/origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - git show "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:context-manifest.json" > baseline.json
     - bin/context-ci manifest --commit "$CI_COMMIT_SHA" --out head.json
     # Redirected rather than --out, so the exit code that fails the job is check's own.
@@ -221,7 +223,11 @@ jobs:
           command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1
       - run:
           name: Baseline from the base branch
-          command: git show "origin/main:context-manifest.json" > baseline.json
+          command: |
+            # Explicit refspec, for the same reason as the GitLab snippet: a single-branch clone
+            # has no origin/main to read from.
+            git fetch --depth 1 origin "+refs/heads/main:refs/remotes/origin/main"
+            git show "origin/main:context-manifest.json" > baseline.json
       - run:
           name: Gate
           command: |
@@ -235,18 +241,30 @@ workflows:
 
 ### What has actually been run
 
-Acceptance test 11.3 allows either three providers or a documented gap with a date. This is the
-gap, as of **13 November 2026**:
+Acceptance test 11.3 allows either three providers or a documented gap with a date. As of
+**13 November 2026**:
 
 | Provider | Snippet | What has been exercised |
 |---|---|---|
-| GitHub Actions | `action.yml` | The binary, the `github` format and `check`'s exit codes were run locally and the emitted workflow commands were inspected. **No run on a GitHub-hosted runner has been observed**, because the Actions API is not reachable from the development environment. |
-| GitLab CI | above | Nothing. The SARIF report path is written to GitLab's documented `artifacts:reports:sarif` shape and the file is valid SARIF 2.1.0, but no pipeline has consumed it. |
-| CircleCI | above | Nothing. |
+| GitHub Actions | `action.yml` | The binary, the `github` format and `check`'s exit codes run locally, and the action's own install command is proven from an empty module cache. **No run on a GitHub-hosted runner**, because the Actions API returns 404 for this repository. |
+| GitLab CI | above | All five commands, verbatim from this page, in Git Bash against a single-branch shallow clone of a fixture project with a committed baseline manifest: install, fetch, baseline from the target branch, head manifest, then `check --format sarif` → **exit 1** with a schema-valid SARIF report already written, which is what `artifacts: when: always` needs. **Not on a GitLab runner**: the `golang:1.23-bookworm` image, `rules:` and `artifacts:reports:sarif` are unexercised. |
+| CircleCI | above | The three commands, verbatim, the same way: **exit 1**, and the readable output names `retrieval.top_k` with its before and after. **Not on a CircleCI runner**: the `cimg/go` image and its checkout depth are unexercised. |
 
-The risk this leaves is a snippet that is wrong about someone else's environment, not a wrong
-result — the tool's own behaviour is covered by its tests. It closes the first time a stranger runs
-one of these and says whether it worked.
+Running them was worth more than reading them. The first version of the GitLab snippet wrote
+`git fetch --depth 1 origin main`, and in a single-branch CI clone that leaves no `origin/main`
+behind — only `FETCH_HEAD` — so `git show origin/main:context-manifest.json` failed. Both snippets now
+fetch with an explicit refspec. That class of bug is exactly what a table saying "unverified" would
+have shipped.
+
+What is left is the runner, not the script: an image, a trigger and a report consumer. Each closes
+the first time a stranger runs one and says whether it worked.
+
+**One thing blocks all of them, and it is not a defect.** This repository is private until the
+16 December launch, so no outsider can install the tool at all — measured on 13 November 2026:
+an anonymous `go install ...@v0.4.1` fails at `git ls-remote` with *could not read Username*, and
+`api.github.com/repos/evidary/context-ci` answers 404. Acceptance test 11.1 (an outside engineer
+installs from the README) cannot be attempted until that changes, and it is the first thing to
+re-run on launch day.
 
 | Requirement | Target |
 |---|---|
