@@ -169,14 +169,84 @@ Rules:
 
 ## 7. CI integration
 
+GitHub Actions, through the wrapper in [`action.yml`](../../action.yml):
+
 ```yaml
-- uses: context-ci/action@v0
+- uses: evidary/context-ci/action@v0.4.0
   with:
-    mode: check                # manifest | diff | attribute | check
-    baseline: origin/main
-    fail-on: fail              # fail | warn | never
+    command: check              # manifest | check
+    baseline: context-manifest.json
+    format: github              # text | github | json | sarif | junit
     config: .context-ci.yaml
 ```
+
+GitLab CI and CircleCI call the binary directly. The action is a shell wrapper around
+`go install`; there is nothing in it a pipeline script cannot do, and a wrapper that exists for one
+provider is not worth copying three times.
+
+```yaml
+# .gitlab-ci.yml
+context-ci:
+  image: golang:1.23-bookworm
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GOBIN: $CI_PROJECT_DIR/bin
+  script:
+    - go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0
+    # The baseline is the manifest committed on the target branch, not a re-render of it: a
+    # baseline regenerated at compare time would agree with whatever it was generated from.
+    - git fetch --depth 1 origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - git show "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:context-manifest.json" > baseline.json
+    - bin/context-ci manifest --commit "$CI_COMMIT_SHA" --out head.json
+    # Redirected rather than --out, so the exit code that fails the job is check's own.
+    - bin/context-ci check --baseline baseline.json --head head.json --format sarif > context-ci.sarif
+  artifacts:
+    when: always
+    reports:
+      sarif: context-ci.sarif
+```
+
+```yaml
+# .circleci/config.yml
+version: 2.1
+jobs:
+  context-ci:
+    docker:
+      - image: cimg/go:1.23
+    steps:
+      - checkout
+      - run:
+          name: Install context-ci
+          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0
+      - run:
+          name: Baseline from the base branch
+          command: git show "origin/main:context-manifest.json" > baseline.json
+      - run:
+          name: Gate
+          command: |
+            context-ci manifest --commit "$CIRCLE_SHA1" --out head.json
+            context-ci check --baseline baseline.json --head head.json
+workflows:
+  pull-request:
+    jobs:
+      - context-ci
+```
+
+### What has actually been run
+
+Acceptance test 11.3 allows either three providers or a documented gap with a date. This is the
+gap, as of **13 November 2026**:
+
+| Provider | Snippet | What has been exercised |
+|---|---|---|
+| GitHub Actions | `action.yml` | The binary, the `github` format and `check`'s exit codes were run locally and the emitted workflow commands were inspected. **No run on a GitHub-hosted runner has been observed**, because the Actions API is not reachable from the development environment. |
+| GitLab CI | above | Nothing. The SARIF report path is written to GitLab's documented `artifacts:reports:sarif` shape and the file is valid SARIF 2.1.0, but no pipeline has consumed it. |
+| CircleCI | above | Nothing. |
+
+The risk this leaves is a snippet that is wrong about someone else's environment, not a wrong
+result — the tool's own behaviour is covered by its tests. It closes the first time a stranger runs
+one of these and says whether it worked.
 
 | Requirement | Target |
 |---|---|
@@ -248,3 +318,9 @@ gate:
 | 2 | Do we support prompt registries (Langfuse, LangSmith) as a source at v0.1, or only files? | Squad | Week 3 |
 | 3 | SARIF or JUnit as the primary machine-readable output? | Squad | Week 4 |
 | 4 | Does the Team tier include CI minutes, or only history? | GTM | Before the February gate |
+
+**Question 3 is answered: both, and neither is primary.** `--format sarif` lands in code scanning,
+`--format junit` in a dashboard that only reads XML, and the action still defaults to `github`
+because an annotation on the changed line is cheaper to read than any report. See
+[cli-reference.md](cli-reference.md) §7 for how each severity is translated, and why a `warn` is
+not dressed up as a failure.

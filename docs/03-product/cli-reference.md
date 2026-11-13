@@ -40,9 +40,11 @@ an empty comparison.
 | Compare | `context-ci diff <base> <head>` | Semantic diff between two manifests |
 | Gate | `context-ci check` | Diffs against a baseline and exits non-zero above the threshold |
 | Explain | `context-ci classes` | Lists every diff class and its default severity |
+| Attribute | `context-ci attribute` | Says which context class moved, when the cases declare what they depend on |
 
-`attribute` is not implemented yet. It is the differentiator and it needs the eval
-results format settled first, so it is deliberately last.
+`attribute` was the last verb to land, because it needed the eval results format settled first.
+It still refuses to guess: with no `depends_on` declarations it reports a correlation and says so.
+See [`attribute`](#attribute).
 
 ### `manifest`
 
@@ -51,11 +53,12 @@ context-ci manifest [--config .context-ci.yaml] [--root .] [--out path] \
                     [--commit <sha>] [--sdk-version <ver>] [--capture <file>]
 ```
 
-`--capture` reads a file written by an SDK at request-assembly time (see
-[sdk/python](../../sdk/python/README.md)) and produces an **instrumented** manifest: `capture.path`
-becomes `instrumented`, `capture.sdk_version` records which SDK produced it, and `rendered_hash`
-becomes the digest of the text that was actually sent rather than of a file in the repository.
-`rendered_sample_hash` is left null, because a live capture is not a sample.
+`--capture` reads a file written by an SDK at request-assembly time — see
+[sdk/python](../../sdk/python/README.md) and [sdk/typescript](../../sdk/typescript/README.md) — and
+produces an **instrumented** manifest: `capture.path` becomes `instrumented`, `capture.sdk_version`
+records which SDK produced it, and `rendered_hash` becomes the digest of the text that was actually
+sent rather than of a file in the repository. `rendered_sample_hash` is left null, because a live
+capture is not a sample.
 
 The capture supplies the rendered prompt and, when it has it, the template. Tools, retrieval and
 policy still come from the configuration: they are configuration, and recording them twice would
@@ -224,9 +227,35 @@ property of the context.
 | `text` (default) | A human reading a log |
 | `github` | Workflow commands, so the entry appears on the pull request |
 | `json` | Scripting and the next tool |
+| `sarif` | Code scanning: each change becomes a result on the pull request's file |
+| `junit` | A test report, for dashboards that only read XML |
 
 `github` escapes `%`, `\r`, `\n`, `:` and `,` in every value, so a string from a
 manifest cannot open a second workflow command.
+
+### `sarif` and `junit`, and why severity is not translated
+
+| Severity | SARIF `level` | JUnit |
+|---|---|---|
+| `fail` | `error` | `<failure>` |
+| `warn` | `warning` | passes, with the warning in `<system-out>` |
+| `ignore` | `note` | `<skipped>` |
+
+JUnit has no warning level. The two dishonest options are to call a warning a failure, which
+teaches a team to ignore red, and to drop it, which hides the change. So a `warn` entry passes its
+test case and carries its message in `<system-out>`; only `fail` becomes `<failure>`. A team that
+wants warnings to break the build sets `severity:` in the configuration, where that decision
+belongs.
+
+SARIF output is deterministic: the same diff renders byte-identically twice, so it can be committed
+or diffed. Every result names a rule that the run declares, because a SARIF consumer drops a result
+whose rule is missing.
+
+Both formats were validated against their published schemas on 13 November 2026: SARIF 2.1.0
+against the OASIS `sarif-schema-2.1.0.json`, and JUnit against the `junit-10.xsd` the Jenkins xunit
+plugin ships, with a diff containing one `fail`, one `warn` and one `ignore` entry. That last part
+matters: `errors` is a required attribute on `testsuite` in that schema, so it is written as `0` —
+a change is never a report that failed to be produced.
 
 ---
 
@@ -282,7 +311,5 @@ reports and fails at once cannot be used to explain a build that already failed.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| `--format sarif`, `--format junit` | Chosen output not yet decided (spec §12 question 3) | Before v0.1 |
-| The GitHub Action wrapper | `action.yml` around the binary | Before v0.1 |
+| CI-provider verification | The GitHub, GitLab and CircleCI snippets exist; none has run on a hosted runner. Documented with a date in [spec.md](spec.md) §7 | First outsider report |
 | Prompt registries as a source | Spec §12 question 2 | After v0.1 |
-| The TypeScript capture SDK | Python exists; TypeScript does not | Before v0.1 |

@@ -165,7 +165,7 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("diff", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		format     = fs.String("format", "text", "text or json")
+		format     = fs.String("format", "text", "text, github, json, sarif or junit")
 		configPath = fs.String("config", "", "configuration file, for severity overrides")
 		root       = fs.String("root", ".", "repository root, for the configuration")
 	)
@@ -209,7 +209,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		root       = fs.String("root", ".", "repository root")
 		head       = fs.String("head", ManifestFileName, "head manifest")
 		base       = fs.String("baseline", "", "base manifest (required)")
-		format     = fs.String("format", "text", "text, github or json")
+		format     = fs.String("format", "text", "text, github, json, sarif or junit")
 	)
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
@@ -287,11 +287,15 @@ func writeResult(w io.Writer, format string, r *diff.Result) error {
 	case "github":
 		writeGitHub(w, r)
 		return nil
+	case "sarif":
+		return writeSARIF(w, r, version)
+	case "junit":
+		return writeJUnit(w, r)
 	case "text", "":
 		writeText(w, r)
 		return nil
 	}
-	return fmt.Errorf("unknown format %q, want text, github or json", format)
+	return fmt.Errorf("unknown format %q, want text, github, json, sarif or junit", format)
 }
 
 func writeText(w io.Writer, r *diff.Result) {

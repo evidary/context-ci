@@ -4,7 +4,7 @@
 
 Context CI records the exact context an AI feature ran with, diffs it semantically between commits, and attributes quality, safety and cost regressions to the specific change that caused them. It runs in your CI, on your keys, with no account required.
 
-**Status:** v0.1.0 tagged. `manifest`, `diff`, `check` and `classes` are implemented and tested, and `action.yml` runs the gate as a GitHub Action. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Status:** v0.4.0 tagged. `manifest`, `diff`, `check`, `attribute` and `classes` are implemented and tested; `action.yml` runs the gate as a GitHub Action; output is available as text, GitHub annotations, JSON, SARIF and JUnit; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---
@@ -31,15 +31,15 @@ Context CI makes that diff exist.
 | **Attribute** | Which manifest entry correlates with the behaviour, cost or safety change, with the measurement shown |
 | **Gate** | A CI check that fails a pull request when a context change exceeds thresholds you set |
 
-## Quick start (planned for v0.1)
+## Quick start
 
 ```yaml
 # .github/workflows/context.yml
-- uses: context-ci/action@v0
+- uses: evidary/context-ci/action@v0.4.0
   with:
-    manifest: context.manifest.json
-    baseline: main
-    fail-on: regression
+    command: check
+    baseline: context-manifest.json
+    format: github
 ```
 
 Runs in ~20 seconds, needs no account, and works with any model provider because it never calls one.

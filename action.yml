@@ -28,7 +28,7 @@ inputs:
     required: false
     default: ""
   format:
-    description: "text, github or json. github writes annotations onto the pull request."
+    description: "text, github, json, sarif or junit. github writes annotations onto the pull request; sarif and junit write a report for code scanning or a dashboard."
     required: false
     default: github
   version:

@@ -8,6 +8,42 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 Nothing yet.
 
+## [0.4.0] — 2026-11-13
+
+### Added
+
+- **SARIF and JUnit output.** `--format sarif` writes SARIF 2.1.0 and `--format junit` writes a
+  JUnit report, for `diff` and `check` alike. Severity is not translated dishonestly: `fail` is
+  `error` in SARIF and `<failure>` in JUnit, `ignore` is `note` and `<skipped>`, and `warn` stays a
+  warning — JUnit has no warning level, so a warning passes its case and carries its message in
+  `<system-out>` rather than being dressed up as a failure.
+- Both formats were validated against their published schemas on the day of release — SARIF 2.1.0
+  against the OASIS schema, JUnit against the Jenkins `junit-10.xsd` — using a diff containing one
+  `fail`, one `warn` and one `ignore` entry.
+- **The TypeScript capture SDK** (`sdk/typescript`, `@evidary/context-ci`): no runtime
+  dependencies, the same five-field capture format as the Python SDK, and `captureMessages()` for
+  callers holding a message list rather than one string. A test runs `context-ci manifest --capture`
+  against a real capture and pins `rendered_hash` to the SHA-256 of the exact text the application
+  sent.
+- CI snippets for GitLab CI and CircleCI, with the SARIF report wired to GitLab's
+  `artifacts:reports:sarif`.
+
+### Fixed
+
+- A released binary reported `dev` as its version: the release workflow built without
+  `-ldflags -X main.version`, so `context-ci version` was useless in a bug report and SARIF's
+  `tool.driver.version` was meaningless to a consumer that dedupes results by it. The workflow now
+  injects `VERSION` and fails if the binary it just built does not report it.
+- `errors` is a required attribute on JUnit's `testsuite` in the schema most CI tools validate
+  against, so it is now written as `0` instead of being omitted.
+- The CLI reference no longer calls `attribute` unimplemented, and the README's quick start now
+  matches `action.yml`'s actual inputs.
+
+### Not done
+
+None of the CI snippets has run on a hosted runner. The gap is recorded with a date in
+[docs/03-product/spec.md](docs/03-product/spec.md) §7.
+
 ## [0.3.0] — 2026-11-13
 
 ### Added
