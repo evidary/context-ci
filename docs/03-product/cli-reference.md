@@ -219,11 +219,58 @@ manifest cannot open a second workflow command.
 
 ---
 
+### `attribute`
+
+```bash
+context-ci attribute --baseline base.json --head context-manifest.json \
+                     --baseline-results base-eval.json --results head-eval.json \
+                     [--format text|json]
+```
+
+Two manifests and two eval runs. It reports what moved, and — when the cases say what they depend
+on — which context class the movement points at.
+
+```json
+{"version": 1, "suite": "support-quality", "cases": [
+  {"id": "q1", "score": 0.92, "depends_on": ["prompt.rendered_hash"]},
+  {"id": "q3", "score": 0.90, "depends_on": ["model.id"]}
+]}
+```
+
+**The distinction the verb exists to keep is attribution versus correlation.**
+
+| The cases declare `depends_on` | What the report says |
+|---|---|
+| Yes | `attribution`: a regressed case that depends on one of the changed classes implicates it, with a share over all regressed cases |
+| No | `correlation`: the scores moved and the configuration moved, and nothing ties them together |
+
+```
+prompt.rendered_hash      3 of 3 regressed cases (100%)  the rendered prompt changed
+```
+
+The same numbers with the declarations removed:
+
+```
+3 of 4 cases regressed, but no case declares which context classes it depends on, so this is a
+correlation: the scores moved and the configuration moved, and nothing here ties them together.
+```
+
+Three rules worth knowing:
+
+- **A movement smaller than 0.001 is not a movement.** Model scores do not repeat exactly, and a
+  report that calls a rounding wobble a regression trains its reader to ignore it.
+- **A case in one run and not the other is incomparable, not unchanged.** A vanished case is a
+  result, and dropping it would quietly shrink the denominator.
+- **A class that changed with no evidence against it is printed with zero**, not omitted. Silence
+  would read as innocence.
+
+`attribute` never exits non-zero for a regression: gating is `check`'s job, and a verb that
+reports and fails at once cannot be used to explain a build that already failed.
+
 ## 8. Not yet implemented
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| `attribute` | Needs the eval-results format settled | Next |
 | `--format sarif`, `--format junit` | Chosen output not yet decided (spec §12 question 3) | Before v0.1 |
 | The GitHub Action wrapper | `action.yml` around the binary | Before v0.1 |
 | Prompt registries as a source | Spec §12 question 2 | After v0.1 |

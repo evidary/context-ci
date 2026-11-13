@@ -8,6 +8,24 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 Nothing yet.
 
+## [0.2.0] — 2026-11-13
+
+### Added
+
+- **`attribute`: the fourth verb, and the differentiator.** Two manifests and two eval runs, and
+  it reports which context class a movement in the scores points at — when the cases declare
+  `depends_on`. Without those declarations it reports a correlation and says in the same
+  sentence that nothing ties the movement to the configuration. A tool that printed the second
+  as if it were the first would be inventing the answer the product exists to give.
+- A movement smaller than 0.001 is not a movement: model scores do not repeat exactly, and a
+  report that calls a rounding wobble a regression trains its reader to ignore it.
+- A case present in one run and absent from the other is **incomparable, not unchanged**, so a
+  vanished case is counted rather than shrinking the denominator quietly.
+- A changed class with no evidence against it is printed with a zero share instead of being
+  omitted; silence would read as innocence.
+- `attribute` never exits non-zero for a regression. Gating is `check`'s job, and a verb that
+  reports and fails at once cannot be used to explain a build that already failed.
+
 ## [0.1.0] — 2026-11-13
 
 ### Added

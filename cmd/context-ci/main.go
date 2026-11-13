@@ -68,6 +68,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runDiff(args[1:], stdout, stderr)
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
+	case "attribute":
+		return attributeCommand(args[1:], stdout, stderr)
 	case "classes":
 		return runClasses(stdout)
 	case "-h", "--help", "help":
