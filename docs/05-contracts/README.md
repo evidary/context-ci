@@ -1,6 +1,6 @@
 # Contracts — what Context CI consumes, publishes and refuses
 
-**Contract set:** `acp-core@1.0.1` (vendored) · **Date:** 29 October 2026
+**Contract set:** `acp-core@1.0.2` (vendored) · **Date:** 29 October 2026
 
 ---
 
@@ -23,7 +23,7 @@ This product must be **fully functional with `acp-core` absent.** That is not a 
 | `module-manifest.v1.json` | 1.0.0 | Optional | Lets the platform discover and health-check this tool if an operator chooses to install it |
 | `cost-event.v1.json` | 1.0.0 | Optional | Lets a customer attribute this tool's own CI minutes and compute to a cost centre |
 
-Vendored copies with digests: [vendor/acp-core@1.0.1/VENDORED.md](vendor/acp-core@1.0.1/VENDORED.md).
+Vendored copies with digests: [vendor/acp-core@1.0.2/VENDORED.md](vendor/acp-core@1.0.2/VENDORED.md).
 
 **What we do not consume: `action-record`, `policy-*`, `ledger-receipt`, `egress-policy`.** This tool does not take consequential actions, does not make policy decisions and does not touch credential brokering. Pulling those in would create a dependency with no product reason.
 
