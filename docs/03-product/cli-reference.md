@@ -41,6 +41,8 @@ an empty comparison.
 | Gate | `context-ci check` | Diffs against a baseline and exits non-zero above the threshold |
 | Explain | `context-ci classes` | Lists every diff class and its default severity |
 | Attribute | `context-ci attribute` | Says which context class moved, when the cases declare what they depend on |
+| Discover | `context-ci module-manifest` | The platform's `module-manifest.v1.json`. Deliberately **not** `manifest`, which already means the tool manifest above |
+| Probe | `context-ci serve` | `GET /healthz` and `GET /readyz`, so the manifest's `health_path` is real |
 
 `attribute` was the last verb to land, because it needed the eval results format settled first.
 It still refuses to guess: with no `depends_on` declarations it reports a correlation and says so.

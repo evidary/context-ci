@@ -4,6 +4,23 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [0.5.0] — 2026-11-14
+
+### Added
+
+- **`module-manifest`** — emits `module-manifest.v1.json`. Deliberately **not** named `manifest`: that verb
+  already writes this product's own `context-manifest.json`, and two documents behind one name is a trap for
+  whoever scripts against it.
+- **`serve`** — `GET /healthz` and `GET /readyz`. The contract requires a `health_path`, and this product had
+  no endpoint. Readiness answers `stateless: true`: a repository that fails a gate is this product working,
+  not this product being unhealthy.
+
+### Changed
+
+- The package is `internal/modulemanifest`, since `internal/manifest` here already means the context manifest.
+
+---
+
 ## [Unreleased]
 
 Nothing yet.

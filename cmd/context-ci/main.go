@@ -65,6 +65,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "manifest":
 		return runManifest(args[1:], stdout, stderr)
+	case "module-manifest":
+		return runModuleManifest(args[1:], stdout, stderr)
+	case "serve":
+		return runServe(args[1:], stdout, stderr)
 	case "diff":
 		return runDiff(args[1:], stdout, stderr)
 	case "check":
