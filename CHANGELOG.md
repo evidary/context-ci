@@ -4,6 +4,36 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [0.6.0] — 2026-11-15
+
+### Added
+
+- **`attribute --format github`.** The attribution report as workflow annotations, one line per finding, so a
+  regression appears on the pull request instead of only in a job log. The level states how strong the claim is:
+  `error` for a class that a regressed case declares a dependency on, `warning` for a regressed case, and
+  `notice` for a changed class that nothing points at — printed with zero rather than dropped, because silence
+  reads as innocence. No annotation carries `file=` or `line=`: an eval case and a context class have no source
+  location, and an invented one would send a reader to an unrelated line. The default output, every existing flag
+  and every exit code are unchanged; `attribute` still exits 0 for a regression.
+- **The action runs `attribute`.** `action.yml` takes `baseline-results` and `results` and passes `format`
+  through, so the same composite step that gates a pull request can explain what moved it.
+
+### Changed
+
+- **The action builds the binary from its own checkout** instead of `go install`ing a module version that only
+  exists once a tag has been pushed. No release asset is assumed to exist: `go build ./cmd/context-ci` against the
+  action's own tree needs no upload, no tag and no download, and what runs is the code the ref names. `version`
+  still pins a released module version when it is set.
+- Every action input now reaches its script through an environment variable rather than a `${{ }}` substitution
+  inside the shell, and `manifest` honours `root` and `config` the way `check` and `attribute` already did.
+
+### Note
+
+The action's steps were extracted from `action.yml` and run under Git Bash against a fixture on this date: the
+build step, `check --format github` (exit 1 on a fail-severity change) and `attribute --format github` (exit 0,
+three annotations). No GitHub-hosted runner ran it — the Actions API answers 404 for this private repository, as
+recorded in [docs/03-product/spec.md](docs/03-product/spec.md) §7.
+
 ## [0.5.0] — 2026-11-14
 
 ### Added

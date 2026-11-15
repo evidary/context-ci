@@ -4,7 +4,7 @@
 
 Context CI records the exact context an AI feature ran with, diffs it semantically between commits, and attributes quality, safety and cost regressions to the specific change that caused them. It runs in your CI, on your keys, with no account required.
 
-**Status:** v0.4.2 tagged. `manifest`, `diff`, `check`, `attribute` and `classes` are implemented and tested; `action.yml` runs the gate as a GitHub Action; output is available as text, GitHub annotations, JSON, SARIF and JUnit; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Status:** v0.6.0 in [`VERSION`](VERSION). `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---
@@ -35,7 +35,7 @@ Context CI makes that diff exist.
 
 ```yaml
 # .github/workflows/context.yml
-- uses: evidary/context-ci/action@v0.4.2
+- uses: evidary/context-ci/action@v0.6.0
   with:
     command: check
     baseline: context-manifest.json
@@ -43,6 +43,23 @@ Context CI makes that diff exist.
 ```
 
 Runs in ~20 seconds, needs no account, and works with any model provider because it never calls one.
+
+When the gate fails, the same action explains it. `attribute` consumes two eval runs and writes
+annotations naming the context class the movement points at — or says plainly that it can only
+correlate, because no case declares what it depends on:
+
+```yaml
+- uses: evidary/context-ci/action@v0.6.0
+  with:
+    command: attribute
+    baseline: context-manifest.base.json
+    baseline-results: evals/base.json
+    results: evals/head.json
+    format: github      # ::error for a class a regression points at
+```
+
+`check` decides the exit code; `attribute` exits 0 whatever it finds, so explaining a red build
+never quietly becomes a second gate.
 
 ## What this is not
 

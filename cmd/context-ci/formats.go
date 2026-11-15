@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/evidary/context-ci/internal/attribute"
 	"github.com/evidary/context-ci/internal/diff"
 )
 
@@ -174,6 +175,51 @@ func writeJUnit(w io.Writer, r *diff.Result) error {
 	}
 	fmt.Fprint(w, xml.Header)
 	return xml.NewEncoder(w).Encode(out)
+}
+
+// writeGitHubAttribution emits workflow commands, so an attribution lands on the pull request
+// beside the diff instead of only in a job log.
+//
+// The level states how strong the claim is, not whether the build failed: `attribute` exits 0
+// whatever it finds, because gating is check's job. A class that a regressed case declares a
+// dependency on is an error, a regressed case is a warning, and a changed class that nothing
+// points at is a notice — printed with zero rather than omitted, because silence reads as
+// innocence.
+//
+// No annotation carries file= or line=. The report names eval cases and context classes, and
+// neither records where it lives; a location here would be invented, and an annotation pointing at
+// an unrelated line is worse than one pointing at nothing.
+func writeGitHubAttribution(w io.Writer, report attribute.Report) {
+	fmt.Fprintf(w, "::notice title=%s::%s\n",
+		escapeProperty("context-ci attribute"),
+		escapeData(fmt.Sprintf("%s: %s: %d compared, %d regressed, %d improved, %d unchanged, %d incomparable",
+			report.Suite, report.Mode, report.Compared, report.Regressed, report.Improved,
+			report.Unchanged, report.Incomparable)))
+
+	for _, implicated := range report.Implicated {
+		level, message := "notice", implicated.Summary
+		switch {
+		case implicated.Regressed > 0 && report.Mode == attribute.ModeAttribution:
+			level = "error"
+			message = fmt.Sprintf("%d of %d regressed cases (%.0f%%) declare it: %s",
+				implicated.Regressed, report.Regressed, implicated.Share*100, implicated.Summary)
+		case implicated.Regressed > 0:
+			level = "warning"
+			message = fmt.Sprintf("%d of %d regressed cases (%.0f%%) are consistent with it: %s",
+				implicated.Regressed, report.Regressed, implicated.Share*100, implicated.Summary)
+		case report.Regressed > 0:
+			message = implicated.Summary + "; no regressed case declares it"
+		default:
+			message = implicated.Summary + "; nothing regressed"
+		}
+		fmt.Fprintf(w, "::%s title=%s::%s\n", level,
+			escapeProperty("context-ci attribute "+implicated.Class), escapeData(message))
+	}
+
+	for _, id := range report.Regressions {
+		fmt.Fprintf(w, "::warning title=%s::regressed by more than %v\n",
+			escapeProperty("context-ci attribute case "+id), attribute.Threshold)
+	}
 }
 
 // encodeJSON writes a document the way the rest of the tool does: indented, so a human reading a

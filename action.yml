@@ -6,33 +6,45 @@ branding:
   color: purple
 
 # A composite action rather than a Docker or JavaScript one: the tool is a single static Go
-# binary, and a container would add a pull to every job that uses it. The version input defaults
-# to this action's own tag, so `uses: evidary/context-ci/action@v0.4.1` runs the binary built
-# from the same commit as the action.
+# binary, and a container would add a pull to every job that uses it. With no version input the
+# binary is built from this action's own checkout, so the ref a workflow names and the code that
+# runs are the same commit — and no release asset has to exist for the action to work.
 
 inputs:
   command:
-    description: "manifest writes a manifest; check compares two of them and fails the job above the threshold."
+    description: "manifest writes a manifest; check compares two of them and fails the job above the threshold; attribute says which context class the movement in two eval runs points at."
     required: false
     default: check
   baseline:
-    description: "Path to the baseline manifest. Required for check: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is."
+    description: "Path to the baseline manifest. Required for check and attribute: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is."
     required: false
     default: ""
   head:
-    description: "Path to the head manifest. Defaults to context-manifest.json, which this action writes when the file does not exist."
+    description: "Path to the head manifest. Defaults to context-manifest.json, which this action writes for check when the file does not exist. attribute never writes it: an attribution is about the manifest the eval ran against, and generating one would silently attribute to whatever is on disk."
     required: false
     default: context-manifest.json
+  baseline-results:
+    description: "Path to the baseline eval results. Required for attribute, which needs both runs to say what moved."
+    required: false
+    default: ""
+  results:
+    description: "Path to the head eval results. Required for attribute."
+    required: false
+    default: ""
+  root:
+    description: "Repository root, for finding .context-ci.yaml. Defaults to the working directory."
+    required: false
+    default: ""
   config:
     description: "Path to .context-ci.yaml, for severity overrides."
     required: false
     default: ""
   format:
-    description: "text, github, json, sarif or junit. github writes annotations onto the pull request; sarif and junit write a report for code scanning or a dashboard."
+    description: "check: text, github, json, sarif or junit. attribute: text, github or json. github writes annotations onto the pull request; sarif and junit write a report for code scanning or a dashboard."
     required: false
     default: github
   version:
-    description: "The module version to install. Defaults to this action's ref, which keeps the action and the binary in step."
+    description: "Install a released module version with go install instead of building this action's checkout. Leave empty to build the commit this ref names."
     required: false
     default: ""
 
@@ -44,62 +56,86 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install context-ci
-      id: install
+    - name: Get context-ci
+      id: get
       shell: bash
-      # go install, not a downloaded artefact: it needs no release assets, and @version is the
-      # same module proxy any user can verify against the tag.
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        version="${{ inputs.version }}"
-        if [ -z "$version" ]; then
-          version="${GITHUB_ACTION_REF:-main}"
+        if ! command -v go >/dev/null 2>&1; then
+          echo "::error::this action needs a Go toolchain to build context-ci; add actions/setup-go before it"
+          exit 1
         fi
-        echo "installing context-ci@${version}"
-        go install "github.com/evidary/context-ci/cmd/context-ci@${version}"
-        echo "bin=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
-        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        if [ -n "$INPUT_VERSION" ]; then
+          # A pinned version is a request for that release: the module proxy serves the tag, and
+          # the toolchain records the version in the binary, so `context-ci version` reports it.
+          go install "github.com/evidary/context-ci/cmd/context-ci@${INPUT_VERSION}"
+          bin="$(go env GOBIN)"
+          if [ -z "$bin" ]; then bin="$(go env GOPATH)/bin"; fi
+        else
+          # No release asset is assumed to exist. Building this action's checkout needs no upload,
+          # no tag and no download, and the binary is the code this ref names.
+          bin="${RUNNER_TEMP}/context-ci-bin"
+          mkdir -p "$bin"
+          ( cd "${GITHUB_ACTION_PATH}" && go build -trimpath -o "${bin}/context-ci$(go env GOEXE)" ./cmd/context-ci )
+        fi
+        echo "$bin" >> "$GITHUB_PATH"
+        "${bin}/context-ci$(go env GOEXE)" version
 
     - name: Write the head manifest when it is missing
       if: ${{ inputs.command == 'check' && inputs.head != '' }}
       shell: bash
+      env:
+        INPUT_HEAD: ${{ inputs.head }}
       run: |
         set -euo pipefail
-        head="${{ inputs.head }}"
-        [ -e "$head" ] && exit 0
-        echo "no $head: writing one for this checkout"
-        context-ci manifest --out "$head"
+        [ -e "$INPUT_HEAD" ] && exit 0
+        echo "no $INPUT_HEAD: writing one for this checkout"
+        context-ci manifest --out "$INPUT_HEAD"
 
     - name: Run
       id: run
       shell: bash
+      env:
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_HEAD: ${{ inputs.head }}
+        INPUT_BASELINE_RESULTS: ${{ inputs.baseline-results }}
+        INPUT_RESULTS: ${{ inputs.results }}
+        INPUT_ROOT: ${{ inputs.root }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FORMAT: ${{ inputs.format }}
       run: |
         set -euo pipefail
-        command="${{ inputs.command }}"
-        head="${{ inputs.head }}"
-        echo "manifest=${head}" >> "$GITHUB_OUTPUT"
-        case "$command" in
+        shared=()
+        if [ -n "$INPUT_ROOT" ]; then shared+=(--root "$INPUT_ROOT"); fi
+        if [ -n "$INPUT_CONFIG" ]; then shared+=(--config "$INPUT_CONFIG"); fi
+        case "$INPUT_COMMAND" in
           manifest)
-            if [ -n "${{ inputs.config }}" ]; then
-              context-ci manifest --config "${{ inputs.config }}" --out "$head"
-            else
-              context-ci manifest --out "$head"
-            fi
+            context-ci manifest --out "$INPUT_HEAD" ${shared[@]+"${shared[@]}"}
+            echo "manifest=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
             ;;
           check)
-            baseline="${{ inputs.baseline }}"
-            if [ -z "$baseline" ]; then
+            if [ -z "$INPUT_BASELINE" ]; then
               echo "::error::check needs a baseline manifest: pass the baseline input"
               exit 1
             fi
-            args=(--baseline "$baseline" --head "$head" --format "${{ inputs.format }}")
-            if [ -n "${{ inputs.config }}" ]; then
-              args+=(--config "${{ inputs.config }}")
+            echo "manifest=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
+            context-ci check --baseline "$INPUT_BASELINE" --head "$INPUT_HEAD" \
+              --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
+            ;;
+          attribute)
+            if [ -z "$INPUT_BASELINE" ] || [ -z "$INPUT_BASELINE_RESULTS" ] || [ -z "$INPUT_RESULTS" ]; then
+              echo "::error::attribute needs baseline, baseline-results and results; without all three there is nothing to attribute"
+              exit 1
             fi
-            context-ci check "${args[@]}"
+            context-ci attribute --baseline "$INPUT_BASELINE" --head "$INPUT_HEAD" \
+              --baseline-results "$INPUT_BASELINE_RESULTS" --results "$INPUT_RESULTS" \
+              --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
             ;;
           *)
-            echo "::error::unknown command $command; use manifest or check"
+            echo "::error::unknown command ${INPUT_COMMAND}; use manifest, check or attribute"
             exit 1
             ;;
         esac

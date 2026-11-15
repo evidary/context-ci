@@ -2,8 +2,8 @@
 
 **Version:** 1.0.0 · **Date:** 31 October 2026 · **Owner:** Context CI squad
 
-The four verbs in [the specification](spec.md) §1. `attribute` is specified but not
-yet implemented; the other three are, and this page is the contract for them.
+The four verbs in [the specification](spec.md) §1. All four are implemented, and this page is the
+contract for them.
 
 ---
 
@@ -22,15 +22,15 @@ In a pull request:
   with: { fetch-depth: 0 }
 - uses: actions/setup-go@v5
   with: { go-version: "1.27" }
-- uses: evidary/context-ci/action@v0.4.1
+- uses: evidary/context-ci/action@v0.6.0
   with:
     baseline: context-manifest.base.json
     format: github      # annotations on the diff
 ```
 
-The action installs the binary with `go install` at its own tag, so what runs is the binary
-built from the commit the action names. `check` without a baseline fails rather than passing on
-an empty comparison.
+The action builds the binary from its own checkout, so what runs is the code the ref names and no
+release asset has to exist. `check` without a baseline fails rather than passing on an empty
+comparison.
 
 ## 2. The verbs
 
@@ -235,6 +235,10 @@ property of the context.
 `github` escapes `%`, `\r`, `\n`, `:` and `,` in every value, so a string from a
 manifest cannot open a second workflow command.
 
+`diff` and `check` write one annotation per changed class and carry `severity` as the level.
+`attribute` has no file to point at, so it writes the findings the report can name — see
+[`attribute --format github`](#attribute---format-github) for what each level means there.
+
 ### `sarif` and `junit`, and why severity is not translated
 
 | Severity | SARIF `level` | JUnit |
@@ -266,7 +270,7 @@ a change is never a report that failed to be produced.
 ```bash
 context-ci attribute --baseline base.json --head context-manifest.json \
                      --baseline-results base-eval.json --results head-eval.json \
-                     [--format text|json]
+                     [--format text|github|json]
 ```
 
 Two manifests and two eval runs. It reports what moved, and — when the cases say what they depend
@@ -308,6 +312,51 @@ Three rules worth knowing:
 
 `attribute` never exits non-zero for a regression: gating is `check`'s job, and a verb that
 reports and fails at once cannot be used to explain a build that already failed.
+
+#### `attribute --format github`
+
+The same report as workflow annotations, so a regression appears on the pull request instead of
+only in the job log:
+
+```
+::notice title=context-ci attribute::support-quality: attribution: 2 compared, 1 regressed, 0 improved, 1 unchanged, 0 incomparable
+::error title=context-ci attribute model.id::1 of 1 regressed cases (100%25) declare it: the model changed
+::warning title=context-ci attribute case q1::regressed by more than 0.001
+```
+
+| Annotation | Level | Why that level |
+|---|---|---|
+| The summary: suite, mode and the five counts | `notice` | It is the qualifier, not a finding, and it must be readable before the rest |
+| A class that a regressed case declares a dependency on | `error` | Evidence ties a regression to this change |
+| A regressed case | `warning` | The score moved; the case name is what a reader needs to go and look |
+| A changed class that nothing points at | `notice` | It changed. Printing it with zero beats silence that reads as innocence |
+
+The level states how strong the claim is, not whether the build failed: `attribute` exits 0
+whatever it finds, so an `error` annotation here never fails a job. `100%25` is how `100%` is
+written on the wire; GitHub unescapes it back to `100%` when it renders the message.
+
+**No annotation carries `file=` or `line=`.** An attribution report names eval cases and context
+classes, and neither records where it lives. An invented location would send a reader to an
+unrelated line, which is worse than no location at all — so the annotation says what it knows and
+nothing else.
+
+In a workflow, run the verb as its own step rather than capturing its output, because annotations
+are read from the step's log:
+
+```yaml
+- uses: evidary/context-ci/action@v0.6.0
+  with:
+    command: attribute
+    baseline: context-manifest.base.json
+    head: context-manifest.json
+    baseline-results: evals/base.json
+    results: evals/head.json
+    format: github
+```
+
+GitHub shows at most 10 warning and 10 error annotations per step (and 20 notices) on the pull
+request; anything beyond that stays in the log. The summary line always carries the counts, so a
+truncated list cannot make a report look empty.
 
 ## 8. Not yet implemented
 

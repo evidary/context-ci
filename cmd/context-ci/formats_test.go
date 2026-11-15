@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/evidary/context-ci/internal/attribute"
 	"github.com/evidary/context-ci/internal/diff"
 )
 
@@ -170,6 +171,103 @@ func TestJUnitReflectsSeverityWithoutInflatingIt(t *testing.T) {
 	}
 	if !strings.HasPrefix(buffer.String(), "<?xml") {
 		t.Fatal("no XML declaration")
+	}
+}
+
+// TestGitHubAttributionPutsTheClaimOnTheLine pins the annotation lines: one per finding, the
+// strength of the claim in the level, and the counts in the summary a reader sees first.
+func TestGitHubAttributionPutsTheClaimOnTheLine(t *testing.T) {
+	report := attribute.Report{
+		Suite:    "support-quality",
+		Mode:     attribute.ModeAttribution,
+		Changed:  []string{"prompt.rendered_hash", "model.id"},
+		Compared: 4, Regressed: 2, Unchanged: 2,
+		Implicated: []attribute.Implication{
+			{Class: "prompt.rendered_hash", Summary: "the rendered prompt changed", Regressed: 2, Share: 1},
+			{Class: "model.id", Summary: "the model changed"},
+		},
+		Regressions: []string{"q1", "q3"},
+	}
+
+	var buffer bytes.Buffer
+	writeGitHubAttribution(&buffer, report)
+
+	want := []string{
+		"::notice title=context-ci attribute::support-quality: attribution: 4 compared, 2 regressed, 0 improved, 2 unchanged, 0 incomparable",
+		"::error title=context-ci attribute prompt.rendered_hash::2 of 2 regressed cases (100%25) declare it: the rendered prompt changed",
+		"::notice title=context-ci attribute model.id::the model changed; no regressed case declares it",
+		"::warning title=context-ci attribute case q1::regressed by more than 0.001",
+		"::warning title=context-ci attribute case q3::regressed by more than 0.001",
+	}
+	got := strings.Split(strings.TrimSuffix(buffer.String(), "\n"), "\n")
+	if len(got) != len(want) {
+		t.Fatalf("%d lines, want %d:\n%s", len(got), len(want), buffer.String())
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("line %d:\n got %q\nwant %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestGitHubAttributionNeverDressesCorrelationAsEvidence: with no depends_on declarations nothing
+// points at a class, so an error-level annotation would claim an attribution the report does not
+// make. The regressed cases are still named, because they are the only evidence there is.
+func TestGitHubAttributionNeverDressesCorrelationAsEvidence(t *testing.T) {
+	report := attribute.Report{
+		Suite:    "support-quality",
+		Mode:     attribute.ModeCorrelation,
+		Changed:  []string{"model.id"},
+		Compared: 3, Regressed: 1, Unchanged: 2,
+		Implicated:  []attribute.Implication{{Class: "model.id", Summary: "the model changed"}},
+		Regressions: []string{"q2"},
+	}
+
+	var buffer bytes.Buffer
+	writeGitHubAttribution(&buffer, report)
+	out := buffer.String()
+	if strings.Contains(out, "::error") {
+		t.Fatalf("a correlation produced an error annotation:\n%s", out)
+	}
+	for _, want := range []string{"correlation: 3 compared, 1 regressed", "model.id", "case q2"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output does not mention %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestGitHubAttributionEscapesAndNamesNoLocation: a summary comes from a manifest, so it must not
+// be able to open a second workflow command, and no annotation may carry a file or a line the
+// report has no basis for.
+func TestGitHubAttributionEscapesAndNamesNoLocation(t *testing.T) {
+	report := attribute.Report{
+		Suite:    "support-quality",
+		Mode:     attribute.ModeAttribution,
+		Changed:  []string{"prompt.template_hash"},
+		Compared: 1, Regressed: 1,
+		Implicated: []attribute.Implication{{
+			Class:     "prompt.template_hash",
+			Summary:   "100% of: the, template\nwas rewritten",
+			Regressed: 1,
+			Share:     1,
+		}},
+		Regressions: []string{"q1"},
+	}
+
+	var buffer bytes.Buffer
+	writeGitHubAttribution(&buffer, report)
+	out := buffer.String()
+
+	if strings.Contains(out, "file=") || strings.Contains(out, "line=") {
+		t.Fatalf("an annotation claims a location the report does not have:\n%s", out)
+	}
+	if !strings.Contains(out, "100%25 of: the, template%0Awas rewritten") {
+		t.Fatalf("the summary was not escaped for a message body:\n%s", out)
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		if strings.Count(line, "::") > 2 {
+			t.Fatalf("a line looks like a second command was injected: %q", line)
+		}
 	}
 }
 

@@ -23,7 +23,7 @@ func attributeCommand(args []string, stdout, stderr io.Writer) int {
 		head       = fs.String("head", ManifestFileName, "head manifest")
 		baseResult = fs.String("baseline-results", "", "eval results for the baseline (required)")
 		results    = fs.String("results", "", "eval results for the head (required)")
-		format     = fs.String("format", "text", "text or json")
+		format     = fs.String("format", "text", "text, github or json")
 	)
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
@@ -89,10 +89,12 @@ func attributeCommand(args []string, stdout, stderr io.Writer) int {
 			return ExitManifest
 		}
 		fmt.Fprintln(stdout, string(encoded))
+	case "github":
+		writeGitHubAttribution(stdout, report)
 	case "text", "":
 		printAttribution(stdout, report)
 	default:
-		fmt.Fprintf(stderr, "attribute: unknown format %q; use text or json\n", *format)
+		fmt.Fprintf(stderr, "attribute: unknown format %q; use text, github or json\n", *format)
 		return ExitUsage
 	}
 	return ExitOK

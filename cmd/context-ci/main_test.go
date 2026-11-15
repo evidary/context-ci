@@ -349,6 +349,47 @@ func TestClassesVerb(t *testing.T) {
 	}
 }
 
+// TestAttributeGitHubFormatIsAdditive: the new format is a third rendering of the same report.
+// The text report keeps its shape, the annotations name the implicated class, and the verb still
+// exits 0 for a regression, because gating is check's job.
+func TestAttributeGitHubFormatIsAdditive(t *testing.T) {
+	head := repo(t, "gpt-y")
+	headManifest := manifestFor(t, head, "head.json")
+	baseManifest := manifestFor(t, repo(t, "gpt-x"), "base.json")
+
+	results := t.TempDir()
+	write(t, results, "base-eval.json", `{"version": 1, "suite": "support-quality",
+  "cases": [{"id": "q1", "score": 0.92, "depends_on": ["model.id"]}]}`)
+	write(t, results, "head-eval.json", `{"version": 1, "suite": "support-quality",
+  "cases": [{"id": "q1", "score": 0.41, "depends_on": ["model.id"]}]}`)
+	args := []string{"attribute", "--root", head,
+		"--baseline", baseManifest, "--head", headManifest,
+		"--baseline-results", filepath.Join(results, "base-eval.json"),
+		"--results", filepath.Join(results, "head-eval.json")}
+
+	var text, annotation, stderr bytes.Buffer
+	if code := run(args, &text, &stderr); code != ExitOK {
+		t.Fatalf("attribute exit = %d, stderr: %s", code, stderr.String())
+	}
+	if !strings.HasPrefix(text.String(),
+		"support-quality: 1 compared, 1 regressed, 0 improved, 0 unchanged, 0 incomparable") {
+		t.Fatalf("the text report changed shape:\n%s", text.String())
+	}
+
+	withFormat := append(append([]string{}, args...), "--format", "github")
+	stderr.Reset()
+	if code := run(withFormat, &annotation, &stderr); code != ExitOK {
+		t.Fatalf("attribute --format github exit = %d, stderr: %s", code, stderr.String())
+	}
+	out := annotation.String()
+	if !strings.Contains(out, "::error title=context-ci attribute model.id::1 of 1 regressed cases (100%25) declare it:") {
+		t.Fatalf("the implicated class is not an error annotation:\n%s", out)
+	}
+	if strings.Contains(out, "file=") {
+		t.Fatalf("an annotation claims a file the report does not know:\n%s", out)
+	}
+}
+
 func mustRead(t *testing.T, path string) string {
 	t.Helper()
 	raw, err := os.ReadFile(path)

@@ -172,17 +172,18 @@ Rules:
 GitHub Actions, through the wrapper in [`action.yml`](../../action.yml):
 
 ```yaml
-- uses: evidary/context-ci/action@v0.4.2
+- uses: evidary/context-ci/action@v0.6.0
   with:
-    command: check              # manifest | check
+    command: check              # manifest | check | attribute
     baseline: context-manifest.json
     format: github              # text | github | json | sarif | junit
     config: .context-ci.yaml
 ```
 
-GitLab CI and CircleCI call the binary directly. The action is a shell wrapper around
-`go install`; there is nothing in it a pipeline script cannot do, and a wrapper that exists for one
-provider is not worth copying three times.
+GitLab CI and CircleCI call the binary directly. The action is a shell wrapper that builds the
+binary from its own checkout — or `go install`s the module at a pinned `version` — and there is
+nothing in it a pipeline script cannot do. A wrapper that exists for one provider is not worth
+copying three times.
 
 ```yaml
 # .gitlab-ci.yml
@@ -246,7 +247,7 @@ Acceptance test 11.3 allows either three providers or a documented gap with a da
 
 | Provider | Snippet | What has been exercised |
 |---|---|---|
-| GitHub Actions | `action.yml` | The binary, the `github` format and `check`'s exit codes run locally, and the action's own install command is proven from an empty module cache. **No run on a GitHub-hosted runner**, because the Actions API returns 404 for this repository. |
+| GitHub Actions | `action.yml` | The binary, the `github` format and `check`'s exit codes run locally, and the action's own steps were extracted from `action.yml` and run under Git Bash against a fixture on 15 November 2026: build from the checkout, `check --format github`, `attribute --format github`. The `go install` path it uses for a pinned `version` is proven from an empty module cache. **No run on a GitHub-hosted runner**, because the Actions API returns 404 for this repository. |
 | GitLab CI | above | All five commands, verbatim from this page, in Git Bash against a single-branch shallow clone of a fixture project with a committed baseline manifest: install, fetch, baseline from the target branch, head manifest, then `check --format sarif` → **exit 1** with a schema-valid SARIF report already written, which is what `artifacts: when: always` needs. **Not on a GitLab runner**: the `golang:1.23-bookworm` image, `rules:` and `artifacts:reports:sarif` are unexercised. |
 | CircleCI | above | The three commands, verbatim, the same way: **exit 1**, and the readable output names `retrieval.top_k` with its before and after. **Not on a CircleCI runner**: the `cimg/go` image and its checkout depth are unexercised. |
 
