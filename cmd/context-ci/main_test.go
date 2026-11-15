@@ -317,6 +317,7 @@ func TestUsageErrors(t *testing.T) {
 		{"diff", "one.json"},
 		{"check", "--root", root},
 		{"manifest", "--root", root, "--commit", "abc", "extra"},
+		{"init", "extra"},
 	}
 	for _, args := range cases {
 		var stdout, stderr bytes.Buffer

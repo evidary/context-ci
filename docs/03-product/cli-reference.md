@@ -1,19 +1,22 @@
 # CLI reference
 
-**Version:** 1.0.0 · **Date:** 31 October 2026 · **Owner:** Context CI squad
+**Version:** 1.0.0 · **Date:** 15 November 2026 · **Owner:** Context CI squad
 
 The four verbs in [the specification](spec.md) §1. All four are implemented, and this page is the
-contract for them.
+contract for them. The rest of this page also covers the verbs that serve them — `init`,
+`classes`, `module-manifest`, `serve` and `version` — none of which changes what a gate decides.
 
 ---
 
 ## 1. Install and first run
 
 ```bash
+context-ci init              # writes a commented .context-ci.yaml, refusing to overwrite one
 context-ci manifest          # writes context-manifest.json for this checkout
 ```
 
-That is the whole quickstart. No account, no network call, no secret.
+That is the whole quickstart. No account, no network call, no secret. `init` is optional: a
+configuration written by hand, as in §4, is read exactly the same way.
 
 In a pull request:
 
@@ -36,6 +39,7 @@ comparison.
 
 | Verb | Command | What it does |
 |---|---|---|
+| Scaffold | `context-ci init` | Writes a commented `.context-ci.yaml` for the current checkout |
 | Capture | `context-ci manifest` | Writes `context-manifest.json` for the current checkout |
 | Compare | `context-ci diff <base> <head>` | Semantic diff between two manifests |
 | Gate | `context-ci check` | Diffs against a baseline and exits non-zero above the threshold |
@@ -47,6 +51,51 @@ comparison.
 `attribute` was the last verb to land, because it needed the eval results format settled first.
 It still refuses to guess: with no `depends_on` declarations it reports a correlation and says so.
 See [`attribute`](#attribute).
+
+### `init`
+
+```bash
+context-ci init [--root .] [--config path] [--force]
+```
+
+Writes a commented `.context-ci.yaml` for the checkout, then says on stderr what still has to be
+changed before the file is true. It exists because the alternative is copying the example in §4 by
+hand, and a configuration typo is a gate that looks on while being off.
+
+| Flag | Default | Behaviour |
+|---|---|---|
+| `--root` | `.` | The checkout the file describes; the same directory `manifest`, `check` and `attribute` read the file from |
+| `--config` | `.context-ci.yaml` under `--root` | Where to write it. A directory that does not exist is an error, not something to create |
+| `--force` | off | Replace a file that already exists. Without it `init` refuses and changes nothing |
+
+What it writes, and what it refuses to invent:
+
+- **A source is named only when the checkout has the file.** Each kind is probed at a short fixed
+  list, and a kind with no file is written as a comment rather than as a path nobody created.
+  The lists are these, in preference order:
+
+  | Source | Probed |
+  |---|---|
+  | `prompt` (required) | `prompts/support.md`, `prompts/system.md`, `prompts/system-prompt.md`, `prompts/prompt.md`, `prompt.md`, `PROMPT.md` |
+  | `tools` | `config/tools.yaml`, `config/tools.yml`, `tools.yaml`, `tools.yml` |
+  | `retrieval` | `config/retrieval.yaml`, `config/retrieval.yml`, `retrieval.yaml`, `retrieval.yml` |
+  | `guardrails` | `config/guardrails.yaml`, `config/guardrails.yml`, `guardrails.yaml`, `guardrails.yml` |
+  | `rendered` | `build/rendered.txt`, `build/rendered.md` |
+
+  The prompt is the exception, because the configuration cannot omit it: `prompts/support.md` is
+  written when nothing is found, and both the file and stderr say it does not exist yet.
+- **`model.provider` and `model.id` are placeholders** — `openai` and `gpt-x` — and the file and
+  stderr both say so. Nothing in a repository says which model a team calls, so a guess presented
+  as a fact would gate on a model nobody uses. `retrieval` and `policy` are commented out entirely
+  for the same reason: no file this tool may read holds their values.
+- **The file is parsed before it is written**, by the same strict loader `check` uses, so `init`
+  cannot produce a configuration the next command rejects. `cmd/context-ci/init_test.go` runs
+  `manifest` and `check` against the generated file rather than trusting that claim.
+- **The gate is written explicitly** as `gate.fail_on: fail`, which is also the default, so the
+  protective setting is visible in the file a team reviews.
+
+It stats a handful of candidate paths and writes one file. It makes no network call, needs no
+account and no secret, and does not run `git`.
 
 ### `manifest`
 
@@ -120,11 +169,16 @@ A configuration error is 2, never 1, so a pipeline can tell "the code is fine bu
 the tool is misconfigured" from "the context regressed". That distinction decides
 whether a team looks at their prompt or at their YAML.
 
+Every way `init` fails is 2 — refusing to replace a file without `--force`, a destination it cannot
+write, a flag it does not know — because nothing was compared and nothing regressed.
+
 ---
 
 ## 4. Configuration
 
-`.context-ci.yaml`, found at `--root` unless `--config` says otherwise.
+`.context-ci.yaml`, found at `--root` unless `--config` says otherwise. `context-ci init` writes a
+commented file in this shape; the values it writes for `model` are placeholders, and the `retrieval`
+and `policy` blocks it writes are commented out until someone knows the real values.
 
 ```yaml
 version: 1
@@ -363,4 +417,36 @@ truncated list cannot make a report look empty.
 | Gap | Why it is a gap | Planned |
 |---|---|---|
 | CI-provider verification | Every snippet's commands are exercised locally, verbatim; none has run on a hosted runner, and no outsider can install at all while the repository is private. Measured and dated in [spec.md](spec.md) §7, with a launch-day item in the [launch plan](../04-plan/30-day-launch.md) | Launch day |
-| Prompt registries as a source | Spec §12 question 2 | After v0.1 |
+| Prompts from a registry | **Undecided, so not built.** [spec.md](spec.md) §12 question 2 asks whether registries are a source at v0.1 or only files, and the repository records no answer. What a source would need is listed below, and requirement C-02 forbids the network call it would make | After v0.1 |
+
+### Why prompts from a registry are still deferred
+
+This row used to say "Spec §12 question 2" and nothing else, which named the open question and not
+the reason. The reason is that the specification does not define the feature, and cannot without
+changing a requirement it states twice.
+
+- **The definition is an open question.** [spec.md](spec.md) §12 question 2 is "Do we support prompt
+  registries (Langfuse, LangSmith) as a source at v0.1, or only files?" It has no recorded answer in
+  any document here. §2 states the intent — "Registries are the thing we read from, not the thing we
+  become" — and §3 defines the asserted capture path as files in the repository. Neither says what a
+  registry source *is*, so implementing one would mean inventing the contract this page exists to
+  record.
+- **Six things would have to be specified, and none are.** The configuration key, given that the
+  validator accepts exactly `prompt`, `rendered`, `tools`, `retrieval` and `guardrails` and rejects
+  every other key; which registry, and which of its API versions; how one version is selected (label,
+  tag, numeric version, or "latest"); whether the template, the rendered text, or both are fetched;
+  where credentials come from, given that C-10 requires the tool to work with no account and no
+  network; and what happens when the registry is unreachable during a check.
+- **Requirement C-02 forbids the network call it would make.** [spec.md](spec.md) §9 C-02 is "no
+  outbound network call in any mode", and §7 repeats "Network: None". A registry source fetches a
+  prompt over HTTP by definition, so shipping one is an amendment to the requirement, which is a
+  specification decision and not an implementation detail.
+- **The digest story is unspecified.** A fetched prompt has no file whose bytes the digest covers.
+  Whether the manifest records the registry's version id, the hash of the fetched text, or both,
+  decides whether a baseline committed to the repository can still be verified and diffed with no
+  network — and it must be, because `check` reads that baseline offline.
+
+So no registry code exists and no configuration key accepts one. Before this row can be removed, §12
+question 2 needs an answer, and the answer needs to settle each point above, in particular how a
+fetched prompt is pinned so `diff` and `check` stay offline. Adding `init` did not make that decision,
+and `init` writes only file sources for exactly this reason.

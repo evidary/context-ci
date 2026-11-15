@@ -32,7 +32,7 @@ Launch a credible open-source Context CI project that:
 
 | Person | Role | Owns |
 |---|---|---|
-| Engineer 1 | CLI/Manifest | `contextci manifest` (the snapshot), `diff`, `check`, `classes`; schema and config. `init` does not exist yet — see the note below |
+| Engineer 1 | CLI/Manifest | `contextci init`, `manifest` (the snapshot), `diff`, `check`, `classes`; schema and config — see the note below |
 | Engineer 2 | Runner/Diff | Semantic diff, golden-set runner, assertions |
 | Engineer 3 | CI/Action | GitHub Action, PR annotations, examples |
 | Engineer 4 | Attribution/Docs | Failure attribution, docs, tests, release |
@@ -66,10 +66,10 @@ Launch a credible open-source Context CI project that:
 ---
 
 **Verb names.** This plan was written before the CLI existed and used `init` and
-`snapshot`. The implemented surface is `manifest`, `diff`, `check` and `classes`, documented
-in [cli-reference.md](../03-product/cli-reference.md). `init` — writing a starter config —
-is not implemented; a team writes `.context-ci.yaml` by hand today, and adding `init` is in
-scope for this 30-day plan. Where this document says "snapshot", read `manifest`.
+`snapshot`. The implemented surface is `init`, `manifest`, `diff`, `check` and `classes`, documented
+in [cli-reference.md](../03-product/cli-reference.md). `init` — writing a starter config — landed on
+15 November 2026, so week 2's "CLI skeleton: `init`, `snapshot`, `diff`" is already half done. Where
+this document says "snapshot", read `manifest`.
 
 ## 4. Week-by-week plan
 

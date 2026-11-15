@@ -167,7 +167,7 @@ The 30-day launch is detailed in [30-day-launch.md](30-day-launch.md); this sect
 ### Weeks 1–4 (launch sprint, 17 Nov–16 Dec 2026)
 - 10 interviews with AI platform/DevEx engineers.
 - Competitive teardown (promptfoo, DeepEval, LangSmith, Braintrust).
-- CLI: `manifest` (the snapshot), `diff`, `check`, `classes`; manifest store and hashing. `init` is not implemented and is in scope for the 30-day plan.
+- CLI: `init` (a commented starter `.context-ci.yaml`), `manifest` (the snapshot), `diff`, `check`, `classes`; manifest store and hashing. `init` landed on 15 November 2026, ahead of the sprint that planned it: [cli-reference.md](../03-product/cli-reference.md) §2 is its contract.
 - GitHub Action: PR check, annotations; local runner with 10 assertions.
 - Attribution: map changed elements to failing tests.
 - Open-source release; docs; examples; launch post.

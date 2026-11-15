@@ -45,6 +45,7 @@ const ManifestFileName = "context-manifest.json"
 const usage = `context-ci — fail the build when the context a model sees changes
 
 usage:
+  context-ci init [flags]         write a starter .context-ci.yaml for this checkout
   context-ci manifest [flags]     write %s for this checkout
   context-ci diff <base> <head>   semantic diff between two manifests
   context-ci check [flags]        diff against the baseline and gate
@@ -68,6 +69,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 	switch args[0] {
+	case "init":
+		return runInit(args[1:], stdout, stderr)
 	case "manifest":
 		return runManifest(args[1:], stdout, stderr)
 	case "module-manifest":

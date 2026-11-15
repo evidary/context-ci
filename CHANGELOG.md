@@ -4,6 +4,47 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [0.7.0] — 2026-11-15
+### Added
+
+- **`context-ci init`** — writes a commented `.context-ci.yaml` for the current checkout. Both
+  [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) and
+  [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md) had it in scope while a team wrote the
+  file by hand, and a hand-copied configuration is one typo away from a gate that looks on while
+  being off. The file it writes is accepted by `check` without an edit, which
+  `cmd/context-ci/init_test.go` proves by running `manifest` and then `check` against it.
+- **`init` discovers the sources the checkout has.** It probes a short fixed list per source kind —
+  `prompts/support.md` and five related prompt paths, `config/tools.yaml` and its variants, and the
+  same pattern for retrieval, guardrails and a rendered prompt — and writes a kind it did not find as
+  a comment instead of as a path nobody created. The prompt is the exception, because the validator
+  requires it: the documented default is written and both the file and stderr say it does not exist
+  yet.
+- **`init` refuses to replace an existing file without `--force`**, and `--root` and `--config` say
+  where to write. Every flag is optional; the default location is the one every other verb reads.
+- **The generated file is parsed by the same strict loader `check` uses before it is written**, so
+  `init` cannot produce a configuration the next command rejects. `model.provider` and `model.id` are
+  written as placeholders and labelled as such, and `retrieval`/`policy` stay commented until their
+  values are known: a value invented by a scaffolder would be recorded as configuration the team never
+  chose.
+- Tests cover the failure paths as well as the happy one: an existing malformed file is left untouched,
+  `--force` replaces it with a valid one, a destination that cannot be written exits 2, a directory
+  named like a source is not treated as a source, and an empty checkout still produces a file that
+  `check` accepts once the prompt path it named has been created — which is the only edit it asks
+  for.
+
+### Changed
+
+- `--help` lists `init`, and `TestUsageNamesEveryDispatchedVerb` — which derives the verbs from the
+  dispatcher — passes without a hand-kept list.
+- [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) documents `init`, its three
+  flags, its exit codes and the exact probe list. §8's "prompt registries" row now says why the
+  feature is still deferred instead of pointing at an open question: the specification does not define
+  it, and requirement C-02 forbids the network call it would make.
+- [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) and
+  [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md) no longer say `init` is unimplemented.
+
+---
+
 ## [0.6.1] — 2026-11-15
 
 **`--help` now names every verb it accepts.** `attribute`, `module-manifest`, `serve` and `version` were all
@@ -65,10 +106,6 @@ recorded in [docs/03-product/spec.md](docs/03-product/spec.md) §7.
 - The package is `internal/modulemanifest`, since `internal/manifest` here already means the context manifest.
 
 ---
-
-## [Unreleased]
-
-Nothing yet.
 
 ## [0.4.2] — 2026-11-13
 
