@@ -48,7 +48,12 @@ usage:
   context-ci manifest [flags]     write %s for this checkout
   context-ci diff <base> <head>   semantic diff between two manifests
   context-ci check [flags]        diff against the baseline and gate
+  context-ci attribute [flags]    say which context class moved, when cases declare dependencies
   context-ci classes              list the diff classes and their defaults
+
+  context-ci module-manifest      write the platform's module-manifest.v1.json
+  context-ci serve [--addr]       GET /healthz and GET /readyz, so the manifest's health_path is real
+  context-ci version              print the tool version
 
 Run 'context-ci <verb> -h' for the flags of one verb.
 `

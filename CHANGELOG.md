@@ -4,6 +4,21 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [0.6.1] — 2026-11-15
+
+**`--help` now names every verb it accepts.** `attribute`, `module-manifest`, `serve` and `version` were all
+dispatched, and all documented in the CLI reference, while the help screen listed four verbs. The only way to
+learn they existed was the changelog or the source, and `attribute` — the verb this product's whole argument
+rests on — had been invisible there since it shipped in 0.6.0.
+
+### Fixed
+
+- The usage text lists `attribute`, `module-manifest`, `serve` and `version`.
+- A test now derives the dispatched verbs from the dispatcher and fails when the usage text does not name one,
+  so the help screen cannot go stale by hand again. Verified by deleting a line and watching it fail.
+
+---
+
 ## [0.6.0] — 2026-11-15
 
 ### Added
