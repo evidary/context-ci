@@ -6,10 +6,11 @@
 // organised by what changes behaviour, and every entry names a class that a
 // configuration can reclassify.
 //
-// The ten classes in the product specification are implemented here as the first
-// ten constants, and each carries the default severity the specification names.
-// The extras below them exist because a change that is invisible to the gate is a
-// hole, not a simplification.
+// The ten classes the C-04 fixture suite in diff_test.go classifies one by one are
+// implemented here as the first ten constants, and each carries the default severity
+// the specification names. `tools[].description_hash` — ADR-0007's addition — and
+// the other extras below them exist because a change that is invisible to the gate
+// is a hole, not a simplification.
 package diff
 
 import (
@@ -25,7 +26,7 @@ import (
 // are stable and are never renamed without a manifest version bump.
 type Class string
 
-// The ten classes named by the product specification.
+// The ten classes the C-04 fixture suite covers.
 const (
 	ClassModelID               Class = "model.id"
 	ClassModelAliasOf          Class = "model.alias_of"

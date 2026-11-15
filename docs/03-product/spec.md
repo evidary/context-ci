@@ -7,13 +7,15 @@
 
 ## 1. Scope
 
-Context CI has exactly four verbs. Anything that is not one of them is out of scope.
+Context CI's product surface is four capabilities. The CLI also carries a few supporting verbs — `init`,
+`classes`, `module-manifest`, `serve` and `version` — and none of them changes what a gate decides, so none is
+a fifth capability. Anything that is not one of the four below is out of scope.
 
 | Verb | Command | What it does |
 |---|---|---|
 | **Capture** | `context-ci manifest` | Produces `context-manifest.json` for the current checkout |
 | **Compare** | `context-ci diff <base> <head>` | Semantic diff between two manifests |
-| **Attribute** | `context-ci attribute --results <file>` | Correlates a quality, cost or safety delta with diff entries |
+| **Attribute** | `context-ci attribute --baseline <base> --baseline-results <file> --results <file>` | Correlates a quality, cost or safety delta with diff entries |
 | **Gate** | `context-ci check` | Exits non-zero when the diff violates configured thresholds |
 
 Implementation status, so this table is not mistaken for a description of the binary:
@@ -130,9 +132,9 @@ The values that are restricted, and what is allowed:
 
 Rules:
 
-1. **Hashes, not content, by default.** A manifest is safe to commit. Content capture is opt-in and off by default.
+1. **Hashes, not content, by default.** A manifest is safe to commit. The schema carries an optional `content` field for a copy a team opted into, and it is verified against its hash on load, but no verb writes one: only the hash is emitted.
 2. **Deterministic.** The same inputs produce a byte-identical manifest, or the tool is broken. The only exception is `created_at`, which is excluded from `digest`.
-3. **The rendered prompt is hashed, not stored**, unless the team opts in. Where a sample is captured it is hashed separately and labelled.
+3. **The rendered prompt is hashed, not stored.** Where a rendered sample is captured it is hashed separately and labelled as a sample.
 4. **No secrets.** Tool definitions are hashed after stripping any credential-shaped field, and any string that matches a recognised token shape is replaced with `<redacted>` whatever its field is called. A random secret with no recognisable prefix is still missed; this is a safety net, not a guarantee.
 5. **Everything that steers the model is hashed.** A field is inside the digest, or it is a plaintext copy that is verified against its hash on load. A count is never the record: `description_tokens` estimates, `description_hash` decides. See [ADR-0007](../07-decisions/adr-0007-unit-of-integrity.md).
 
@@ -145,7 +147,7 @@ A text diff of two manifests is useless — JSON key order alone would produce n
 | `model.id` changed | `gpt-x` → `gpt-y` | Fail |
 | `model.alias_of` changed | alias now resolves elsewhere | Fail |
 | `model.params` changed | temperature 0 → 0.7 | Warn |
-| `prompt.rendered_hash` changed | any rendered change | Warn, with a text diff if content was captured |
+| `prompt.rendered_hash` changed | any rendered change | Warn; the entry's detail says a text diff is possible only when both manifests carry captured text, and no verb writes that text |
 | `tools[]` added/removed | a tool gained or lost | Fail |
 | `tools[].description_hash` changed | an edit that keeps the length | Fail |
 | `tools[].description_tokens` delta | +900 tokens | Warn with a cost projection |
@@ -287,13 +289,21 @@ capture:
     prompt: prompts/support.md
     tools: config/tools.yaml
     retrieval: config/retrieval.yaml
+model:
+  provider: openai
+  id: gpt-x
 severity:
   model.id: fail
   retrieval.top_k: warn
 gate:
   fail_on: fail
-  max_cost_delta_usd_per_day: 50
+  calls_per_day: 20000
+  input_usd_per_mtok: 3
 ```
+
+The gate compares severities and never dollars: `calls_per_day` and `input_usd_per_mtok` only
+turn a token delta into a projection printed beside the entry, and a cost figure never fails a
+build by itself. `model.id` is required because a manifest with no model cannot be compared.
 
 ## 9. Requirements
 
@@ -302,7 +312,7 @@ gate:
 | C-01 | The same inputs produce a byte-identical manifest, excluding `created_at` | Determinism test across 100 runs and 3 operating systems |
 | C-02 | No outbound network call in any mode | Network-namespace test that blocks all egress |
 | C-03 | A 50-tool manifest is produced in under 10 s | Benchmark |
-| C-04 | Diff correctly classifies all ten diff classes with a fixture set | Fixture suite, published |
+| C-04 | Diff correctly classifies ten of the eleven classes in §5 with a fixture set | Fixture suite, published; `TestEveryClassIsReachable` covers every emitted class |
 | C-05 | `check` exits non-zero on a configured `fail` class and zero on `warn` | CI test |
 | C-06 | Failure output names the changed entry and the threshold | Snapshot test |
 | C-07 | No credential-shaped string appears in a manifest | Secret corpus test |

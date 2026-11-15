@@ -69,7 +69,8 @@ Launch a credible open-source Context CI project that:
 `snapshot`. The implemented surface is `init`, `manifest`, `diff`, `check` and `classes`, documented
 in [cli-reference.md](../03-product/cli-reference.md). `init` — writing a starter config — landed on
 15 November 2026, so week 2's "CLI skeleton: `init`, `snapshot`, `diff`" is already half done. Where
-this document says "snapshot", read `manifest`.
+this document says "snapshot", read `manifest`; where it says `contextci`, read `context-ci`, the
+binary name the repository builds.
 
 ## 4. Week-by-week plan
 

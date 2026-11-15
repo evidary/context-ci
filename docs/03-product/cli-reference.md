@@ -47,10 +47,11 @@ comparison.
 | Attribute | `context-ci attribute` | Says which context class moved, when the cases declare what they depend on |
 | Discover | `context-ci module-manifest` | The platform's `module-manifest.v1.json`. Deliberately **not** `manifest`, which already means the tool manifest above |
 | Probe | `context-ci serve` | `GET /healthz` and `GET /readyz`, so the manifest's `health_path` is real |
+| Version | `context-ci version` | Prints the tool version, including the module version the toolchain stamped into a `go install`ed binary |
 
-`attribute` was the last verb to land, because it needed the eval results format settled first.
-It still refuses to guess: with no `depends_on` declarations it reports a correlation and says so.
-See [`attribute`](#attribute).
+`attribute` was the last of the four specification verbs to land, because it needed the eval
+results format settled first; `init` came after it. It still refuses to guess: with no
+`depends_on` declarations it reports a correlation and says so. See [`attribute`](#attribute).
 
 ### `init`
 
@@ -126,7 +127,7 @@ reproduced, which makes it useless as evidence.
 ### `diff`
 
 ```bash
-context-ci diff <base.json> <head.json> [--format text|json] [--config path]
+context-ci diff <base.json> <head.json> [--format text|github|json|sarif|junit] [--config path]
 ```
 
 Needs no configuration file. Comparing two manifests should never require setup, so
@@ -136,7 +137,7 @@ severity overrides are optional here.
 
 ```bash
 context-ci check --baseline <base.json> [--head context-manifest.json] \
-                 [--config .context-ci.yaml] [--format text|github|json]
+                 [--config .context-ci.yaml] [--format text|github|json|sarif|junit]
 ```
 
 `--baseline` is required. Without a baseline there is nothing to compare, and a
@@ -163,7 +164,7 @@ Exit codes are part of the contract, so a pipeline can script them.
 | 0 | Nothing changed, or nothing at or above the threshold |
 | 1 | **The gate failed**: at least one change at or above `gate.fail_on` |
 | 2 | Usage or configuration error |
-| 3 | A manifest could not be read, or is invalid |
+| 3 | A manifest could not be read, or is invalid. `module-manifest` also uses it for a build with no released identity, and `serve` for a server that failed after it started: neither is a usage error, and both mean the document the tool was asked for could not be produced |
 
 A configuration error is 2, never 1, so a pipeline can tell "the code is fine but
 the tool is misconfigured" from "the context regressed". That distinction decides
@@ -264,8 +265,9 @@ property of the context.
 
 ## 6. What the manifest does not contain
 
-- **No prompt text**, unless `Content` capture is enabled and recorded separately.
-  Only its hash.
+- **No prompt text.** The manifest schema carries an optional `content` field for a copy a
+  team opted into, and it is checked against its hash on load, but no verb writes one: the
+  prompt reaches the manifest as a hash and nothing else.
 - **No credential-shaped field from a tool schema.** `api_key`, `token`,
   `secret`, `password`, `authorization`, `private_key` and similar are removed
   before hashing, so a default value in a schema cannot leak into a file that gets
@@ -286,8 +288,10 @@ property of the context.
 | `sarif` | Code scanning: each change becomes a result on the pull request's file |
 | `junit` | A test report, for dashboards that only read XML |
 
-`github` escapes `%`, `\r`, `\n`, `:` and `,` in every value, so a string from a
-manifest cannot open a second workflow command.
+`github` escapes `%`, `\r` and `\n` in every message, and additionally `:` and `,` in the
+title property, so a string from a manifest cannot open a second workflow command. The two
+sets differ on purpose: GitHub unescapes only the first three in a message, so escaping a
+colon there would show the escape to the reader.
 
 `diff` and `check` write one annotation per changed class and carry `severity` as the level.
 `attribute` has no file to point at, so it writes the findings the report can name — see

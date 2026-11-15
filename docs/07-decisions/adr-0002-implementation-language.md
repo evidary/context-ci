@@ -27,7 +27,7 @@ Constraints that actually bear on the choice:
 ## Decision
 
 **Go for the CLI.** Python and TypeScript for the capture SDKs, as separate
-libraries that emit the same manifest.
+libraries that write the capture file the CLI turns into a manifest.
 
 ## Why
 
@@ -54,10 +54,12 @@ libraries that emit the same manifest.
 
 - `go.mod` pins a Go version; the release workflow builds for three operating
   systems and signs the artefacts.
-- The manifest schema is implemented **three times** — Go, Python, TypeScript —
-  which is the same cross-implementation discipline `acp-core` uses for its hash
-  path. Each SDK ships a determinism test against a shared fixture, so a divergence
-  is caught by a test rather than by a customer.
+- The manifest is built in **one implementation**, Go. The SDKs in Python and
+  TypeScript write the capture file that `manifest --capture` reads; they do not
+  compute the manifest or its digest, so there is no second implementation to keep
+  in step. The cross-implementation check this decision did plan exists only for the
+  digest, in `tools/interop/reference_digest.py`, which recomputes the pinned value
+  independently of the Go code.
 - The CLI may take third-party Go dependencies. `acp-core`'s zero-dependency rule
   exists because a verifier must run on a hostile host with no supply chain; a CI
   tool has no such constraint, and hand-rolling a YAML parser would be worse than

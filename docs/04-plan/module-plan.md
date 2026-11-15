@@ -138,7 +138,7 @@ GitHub Action / CLI / dashboard / PR annotations
 | Workstream | Owner | Deliverable |
 |---|---|---|
 | Product/schema | CEO/Product | Manifest schema, PRD, success metrics |
-| CLI/Action | Backend | `contextci` CLI, GitHub Action |
+| CLI/Action | Backend | `context-ci` CLI, GitHub Action |
 | Diff/attribution | Backend/ML | Semantic diff, failure ranking |
 | Runner/evals | Backend | Golden-set runner, assertions, judge |
 | Dashboard | Frontend | Timeline, compare, alerts |

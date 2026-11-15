@@ -4,7 +4,7 @@
 
 Context CI records the exact context an AI feature ran with, diffs it semantically between commits, and attributes quality, safety and cost regressions to the specific change that caused them. It runs in your CI, on your keys, with no account required.
 
-**Status:** v0.6.0 in [`VERSION`](VERSION). `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Status:** v0.7.0 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---
@@ -65,7 +65,7 @@ never quietly becomes a second gate.
 
 - **Not an eval framework.** promptfoo, DeepEval, Ragas and LangSmith already do evals well. Context CI consumes eval results and attributes them; it does not try to be better at scoring.
 - **Not an observability platform.** It does not sit in your request path or store your traces.
-- **Not a prompt registry.** It reads from wherever your prompts already live, including registries, and records what was actually used.
+- **Not a prompt registry.** It reads the prompt files in your repository, and records what was actually used. A registry source is not supported yet — [cli-reference.md](docs/03-product/cli-reference.md) §8 says why.
 - **Not a model proxy.** It never sees your traffic and never holds your keys.
 
 ## Why it is a separate repository
