@@ -4,7 +4,7 @@
 
 Context CI records the context an AI feature is **declared** to run with — the prompt, tool and retrieval files in your repository, hashed, and the model, parameters, retrieval settings and policy version your `.context-ci.yaml` states — diffs it semantically between commits, and lists the context changes an eval regression is consistent with. It runs in your CI, with no account, no key and no network call.
 
-**Status:** v0.7.1 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Status:** v0.8.0 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
 **Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
 
 ---
@@ -38,7 +38,7 @@ Context CI makes that diff exist for everything that reaches your repository.
 **See the gate fail, in a minute.** [`examples/minimal`](examples/minimal) is one prompt, one configuration and the manifest they produce:
 
 ```bash
-go install github.com/evidary/context-ci/cmd/context-ci@v0.7.1
+go install github.com/evidary/context-ci/cmd/context-ci@v0.8.0
 git clone https://github.com/evidary/context-ci && cd context-ci
 
 context-ci check --root examples/minimal --baseline examples/minimal/context-manifest.json
@@ -87,7 +87,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: git show "origin/${BASE_REF}:context-manifest.json" > "${RUNNER_TEMP}/context-manifest.base.json"
-      - uses: evidary/context-ci@v0.7.1
+      - uses: evidary/context-ci@v0.8.0
         with:
           command: check
           baseline: ${{ runner.temp }}/context-manifest.base.json
@@ -102,7 +102,7 @@ proven causes — or says plainly that it can only correlate, because no regress
 it depends on:
 
 ```yaml
-      - uses: evidary/context-ci@v0.7.1
+      - uses: evidary/context-ci@v0.8.0
         with:
           command: attribute
           baseline: ${{ runner.temp }}/context-manifest.base.json

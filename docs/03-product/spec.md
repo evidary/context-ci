@@ -212,7 +212,7 @@ root and is therefore named `evidary/context-ci@<ref>`:
   env:
     BASE_REF: ${{ github.base_ref }}
   run: git show "origin/${BASE_REF}:context-manifest.json" > "${RUNNER_TEMP}/context-manifest.base.json"
-- uses: evidary/context-ci@v0.7.1
+- uses: evidary/context-ci@v0.8.0
   with:
     command: check              # manifest | check | attribute
     baseline: ${{ runner.temp }}/context-manifest.base.json
@@ -238,7 +238,7 @@ context-ci:
   variables:
     GOBIN: $CI_PROJECT_DIR/bin
   script:
-    - go install github.com/evidary/context-ci/cmd/context-ci@v0.7.1
+    - go install github.com/evidary/context-ci/cmd/context-ci@v0.8.0
     # The baseline is the manifest committed on the target branch, not a re-render of it: a
     # baseline regenerated at compare time would agree with whatever it was generated from.
     # The refspec is explicit because a CI clone is usually single-branch, and `git fetch origin
@@ -265,7 +265,7 @@ jobs:
       - checkout
       - run:
           name: Install context-ci
-          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.7.1
+          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.8.0
       - run:
           name: Baseline from the base branch
           command: |
@@ -296,7 +296,7 @@ Acceptance test 11.3 allows either three providers or a documented gap with a da
 | CircleCI | above | The three commands, as they were on 13 November 2026, the same way: **exit 1**, and the readable output names `retrieval.top_k` with its before and after. **Not on a CircleCI runner**: the `cimg/go` image and its checkout depth are unexercised. |
 
 Two things in the GitLab and CircleCI snippets changed on 16 November 2026 and have not been
-re-run: the install pin moved from `v0.4.2` to `v0.7.1`, and the image tags from Go 1.23 to Go 1.27,
+re-run: the install pin moved from `v0.4.2` to the current release, and the image tags from Go 1.23 to Go 1.27,
 because `go.mod` requires 1.27 and the official `golang` image does not download a newer toolchain
 by itself. The image tags are assumed to exist; nobody here has pulled them.
 

@@ -6,11 +6,16 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-16
+
 **The gate could not fail, and now it can.** An audit on 16 November 2026 ran the built binary
 against the README and found that the documented quickstart compared a manifest with itself. This
-entry is that defect and the ten found beside it. None of it is in the `v0.7.1` tag: the documents
-pin `v0.7.1` because `VERSION` says so, and `tools/check_docs.py` now fails when a pin and `VERSION`
-disagree, so the pins move with the release that carries these fixes.
+entry is that defect and the ten found beside it. None of it is in the `v0.7.1` tag, which should not
+be used: this release carries the fixes, and the documents pin it. `tools/check_docs.py` now fails
+when a pin and `VERSION` disagree.
+
+**Breaking:** `check` builds its head from the working tree unless `--head` names one, and refuses one
+file as both sides; a manifest or configuration that used to be accepted loosely may now be refused.
 
 ### Fixed
 
@@ -23,7 +28,7 @@ disagree, so the pins move with the release that carries these fixes.
   baseline, edits the prompt and requires exit 1.
 - **`uses: evidary/context-ci/action@v0.6.0` could not resolve.** `action.yml` is at the repository
   root and there has never been an `action/` directory. The documents now say
-  `evidary/context-ci@v0.7.1`, decision D-05 records the correction, and the README's workflow is a
+  `evidary/context-ci@v0.8.0`, decision D-05 records the correction, and the README's workflow is a
   whole one: a checkout with history, a Go toolchain, the baseline read from the base branch, then
   the action. The action installs Go itself when the runner has none.
 - **A flag after a positional was not parsed.** `context-ci diff a.json b.json --format sarif` — the
@@ -68,7 +73,7 @@ disagree, so the pins move with the release that carries these fixes.
   that, and say what it means: a change made outside the repository is not seen.
 - The README and the document index said 0.7.0 while `VERSION` said 0.7.1.
 - The specification's GitLab and CircleCI snippets pinned `v0.4.2` and a Go 1.23 image for a module
-  whose `go.mod` requires 1.27. They pin `v0.7.1` and Go 1.27, and the page says these two edits
+  whose `go.mod` requires 1.27. They pin this release and Go 1.27, and the page says these two edits
   have not been re-run.
 - A stray code fence in the specification's §4 rendered everything from "Rules" to §7 as code.
 

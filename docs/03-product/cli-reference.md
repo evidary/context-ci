@@ -48,7 +48,7 @@ In a pull request:
   env:
     BASE_REF: ${{ github.base_ref }}
   run: git show "origin/${BASE_REF}:context-manifest.json" > "${RUNNER_TEMP}/context-manifest.base.json"
-- uses: evidary/context-ci@v0.7.1
+- uses: evidary/context-ci@v0.8.0
   with:
     baseline: ${{ runner.temp }}/context-manifest.base.json
     format: github      # annotations on the pull request
@@ -547,7 +547,7 @@ In a workflow, run the verb as its own step rather than capturing its output, be
 are read from the step's log:
 
 ```yaml
-- uses: evidary/context-ci@v0.7.1
+- uses: evidary/context-ci@v0.8.0
   with:
     command: attribute
     baseline: context-manifest.base.json
