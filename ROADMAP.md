@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status on 16 November 2026:** version 0.9.0, pre-release. The repository is private.
+**Status on 16 November 2026:** version 0.9.0, pre-release. The repository is public and has not been announced.
 **Public launch target:** 16 December 2026.
 
 This page is what is true now.
@@ -24,10 +24,10 @@ This page is what is true now.
 
 | Item | Why it is not done |
 |---|---|
-| Run CI and the action on GitHub-hosted runners | Everything was run locally; nothing has run on a hosted runner yet. The action's release-binary download has never executed |
+| Run the action on a real pull request | CI and the action pass on hosted Linux, macOS and Windows runners. The action's default base branch on a `pull_request` event has not been exercised, because no pull request has been opened against this repository since it was written |
 | Check the tool-definition shapes against files exported from each vendor's tooling | They were written from the documented formats and are covered by fixtures only |
 | Run it against real public repositories that hold agent files and prompts | The false-positive rate of the defaults is unknown until it is |
-| Someone outside the team installs from the README | Impossible while the repository is private |
+| Someone outside the team installs from the README | Nobody has been asked yet |
 | Tag the release the documents pin | The install lines name a version that has to exist as a tag |
 | Decide on signed releases and an SBOM | Releases carry SHA-256 checksums only |
 | Publish the manifest as a JSON Schema, with a stability promise | Open decision D-01 in [docs/07-decisions/README.md](docs/07-decisions/README.md) |

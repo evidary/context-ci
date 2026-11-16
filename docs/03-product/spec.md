@@ -314,17 +314,20 @@ As of **16 November 2026**, for version 0.9:
 | Where | What has been exercised |
 |---|---|
 | The binary | `go test ./...` on Windows, including end-to-end tests that create git repositories and run `check --base-ref` against them: an unchanged branch, an edit, a base branch that moved on, two branches merged, a base with no configuration, a project in a subdirectory. `tools/smoke_quickstart.sh` runs the README's steps against a built binary under Git Bash. |
-| GitHub Actions | **Nothing on a hosted runner.** `action.yml` was rewritten for 0.9 and has not been executed at all: the download of a release binary, the checksum comparison, the fallback to a build, the default base on a pull request and the job summary are unexercised. `.github/workflows/ci.yml` runs the action on Linux, macOS and Windows against `examples/minimal` and will be the first execution. |
+| GitHub Actions | `.github/workflows/ci.yml` ran green on GitHub-hosted runners on 16 November 2026: tests on Linux, macOS and Windows, the smoke script, and `action.yml` on all three. The action built its binary from the checkout with no Go toolchain set up by the workflow, passed on an unedited checkout, failed on an edited prompt with a warning annotation on `examples/minimal/prompts/support.md` line 5, and passed with that class acknowledged, the annotation becoming a notice. **Not exercised:** the default base branch on a `pull_request` event, since the CI passes `base-ref` itself, and nobody has looked at the rendered job summary. The download of a release binary runs for the first time against the 0.9.0 release; the result is recorded in the changelog. |
 | GitLab CI, CircleCI | The snippets above were rewritten for `--base-ref` and **have not been run**, on a runner or locally. The image tags are assumed to exist. The versions of these snippets that were run on 13 November 2026 used a committed manifest and are gone. |
 
 An earlier version of the GitLab snippet wrote `git fetch --depth 1 origin main`, and in a
 single-branch CI clone that leaves no `origin/main` behind. Running it found that; reading it had
 not. The same will be true of everything in the table above that says it has not been run.
 
-**One thing blocks an outside test, and it is not a defect.** This repository is private until the
-16 December launch, so nobody outside can install the tool, and a release binary cannot be
-downloaded without credentials. Acceptance test 11.1 (an outside engineer installs from the README)
-cannot be attempted until that changes, and it is the first thing to re-run on launch day.
+The first run on hosted runners found what local runs on Windows could not: a test that had
+failed on Linux and macOS since 0.8.0, because the two report a different error for a path below a
+regular file. The tool was right and the test was wrong, and it had kept the 0.8.0 release from
+publishing.
+
+Acceptance test 11.1 (an outside engineer installs from the README) is possible now that the
+repository is public, and nobody has been asked yet.
 
 | Requirement | Target |
 |---|---|
@@ -375,7 +378,7 @@ configuration the base commit had. Adding a file group therefore reports its fil
 
 | ID | Requirement | Verification |
 |---|---|---|
-| C-01 | The same inputs produce the same digest, whatever the commit and the time | `TestDeterministicAcrossRuns` (100 runs on one machine), `TestDigestIgnoresCommit` and `TestGitTreeReadsOnlyWhatTheCommitHolds`. One operating system until CI has run |
+| C-01 | The same inputs produce the same digest, whatever the commit and the time | `TestDeterministicAcrossRuns` (100 runs on one machine), `TestDigestIgnoresCommit` and `TestGitTreeReadsOnlyWhatTheCommitHolds`. Run on Linux, macOS and Windows in CI |
 | C-02 | The binary makes no outbound network call | **No test.** By inspection: the only network code is `serve`, which listens |
 | C-03 | A 50-tool manifest is produced in under 10 s | **Not measured** |
 | C-04 | Diff classifies every class `context-ci classes` lists | `TestEveryClassIsReachable` |
@@ -383,8 +386,8 @@ configuration the base commit had. Adding a file group therefore reports its fil
 | C-06 | Failure output names the changed entry, its file and line, and the threshold | `TestCheckAgainstABaseRef`, `TestCheckWritesASummaryAndAnnotations` |
 | C-07 | No recognised credential value affects a hash | `TestCredentialValuesDoNotAffectTheHash`, `TestCredentialSpellings` |
 | C-08 | Attribution states confounding when two or more classes changed | `TestTwoChangesTogetherAreStatedAsConfounded`, and `TestAttributeStatesConfoundingAndNeverACause` at the CLI |
-| C-09 | Runs on Linux, macOS and Windows runners | CI matrix in `.github/workflows/ci.yml`; not yet run on a hosted runner |
-| C-10 | The tool works with no account and no network | Manual test by an outsider; not possible before launch |
+| C-09 | Runs on Linux, macOS and Windows runners | CI matrix in `.github/workflows/ci.yml`, green on hosted runners on 16 November 2026. The three runners reported the same digest for `examples/minimal` |
+| C-10 | The tool works with no account and no network | Manual test by an outsider; nobody has been asked yet |
 | C-11 | A comment or a reordering in a retrieval or guardrails file is not a change | `TestCheckAgainstABaseRef`, `TestStructuredSourcesIgnoreCommentsAndOrder` |
 | C-12 | Two branches that change different context files merge without conflict, and a pull request is not blamed for an earlier one | `TestTwoBranchesThatChangeContextMergeCleanly`, `TestADocsOnlyChangeIsNotBlamedForAnEarlierOne`, `TestTheBaselineIsWhereTheBranchLeftTheBase` |
 | C-13 | A fail-class change can be accepted for one run without editing the configuration, and stays in the report | `TestAcknowledgeIsTheApprovalPath` |

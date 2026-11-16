@@ -71,12 +71,21 @@ required and its `version` input now prefers a release binary.
 - `examples/minimal/context-manifest.json`, and the instruction to commit and regenerate a
   manifest.
 
-### Not verified
+### Fixed
 
-- Nothing has run on a GitHub-hosted runner: `ci.yml`, the action's download, checksum and
-  fallback paths, the default base ref on a pull request and the job summary.
-- The GitLab CI and CircleCI snippets were rewritten and not run.
-- SARIF with locations was not re-validated against the schema.
+- **A test that failed on Linux and macOS since 0.8.0.** `TestInitReportsAnUnwritableDestination`
+  required "does not exist" for a path below a regular file, which is what Windows reports; the
+  others report "not a directory". `init` was correct. The failure kept the 0.8.0 release from
+  publishing, so 0.8.0 has a tag and no binaries.
+
+### Verified, and not
+
+- `ci.yml` is green on GitHub-hosted Linux, macOS and Windows runners, including `action.yml` on
+  all three with annotations on the changed line. The three report the same digest for the example.
+- SARIF with locations validates against the OASIS 2.1.0 schema.
+- Not exercised: the action's default base branch on a real pull request, and the rendered job
+  summary. The action's release-binary download runs for the first time against this release.
+- The GitLab CI and CircleCI snippets have not run on those providers.
 - The defaults have not been run against repositories other than fixtures, so how often they
   report something a team does not care about is unknown.
 

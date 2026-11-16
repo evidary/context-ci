@@ -75,7 +75,7 @@ Named with a release tag (`@v0.9.0`) or given `version`, the action downloads th
 binary for the runner's operating system and architecture and compares it with the release's
 `SHA256SUMS`; a mismatch fails the step. Named with a branch or a commit, or when the download
 fails, it builds the binary from its own checkout, installing the Go version its `go.mod` names if
-the runner has none. None of this has run on a hosted runner yet; see §8.
+the runner has none. [spec.md](spec.md) §7 says which of these paths have run on a hosted runner.
 
 ## 2. The verbs
 
@@ -548,8 +548,9 @@ whose rule is missing.
 **Locations.** A result or annotation about a file carries the file's path, relative to the
 repository, and a line: the first changed line, the line that names the tool, or the line of the
 key in `.context-ci.yaml` for a declared value. `diff`, which compares two manifest files, has no
-repository to look in and writes no locations. The SARIF with locations has not been re-validated
-against the schema or uploaded to code scanning.
+repository to look in and writes no locations. SARIF with locations, including an
+acknowledged result, was validated against the OASIS `sarif-schema-2.1.0.json` on 16 November 2026.
+It has not been uploaded to code scanning.
 
 **A diff with no change is a complete report.** `rules` and `results` are empty arrays, and the
 JUnit suite is an empty `<testsuite tests="0" ...>`. Until 16 November 2026 the SARIF for an
@@ -718,7 +719,7 @@ truncated list cannot make a report look empty.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| CI-provider verification | Nothing has run on a hosted runner, and no outsider can install at all while the repository is private. The action's release-binary download, its checksum check and its job summary have never executed. Dated in [spec.md](spec.md) §7 | Launch day |
+| CI-provider verification | GitHub Actions is exercised by this repository's own CI. The GitLab CI and CircleCI snippets have not run on those providers' runners. Dated in [spec.md](spec.md) §7 | When a user of either asks |
 | A comment on the pull request | The report goes to annotations and the job summary. A comment needs a token with write access, which a pull request from a fork does not get | After launch, if asked for |
 | Live MCP servers | Tool definitions are read from a file somebody saved. Nothing connects to a server | Not scheduled |
 | Token counts | `description_tokens` is a count of words. No tokenizer is bundled | Not scheduled |

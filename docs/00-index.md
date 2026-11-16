@@ -2,7 +2,7 @@
 
 **This file routes every question to exactly one document in this repository.** Context CI is a standalone product; nothing needed to build, sell or support it lives outside this repository except the vendored contracts, which are copied in.
 
-**Repo:** `context-ci` · **Version:** 0.9.0 (pre-release; the CLI is implemented, and the repository is private until the launch planned for 16 Dec 2026) · **Last updated:** 16 November 2026
+**Repo:** `context-ci` · **Version:** 0.9.0 (pre-release; the CLI is implemented, the repository is public, and the announcement is planned for 16 Dec 2026) · **Last updated:** 16 November 2026
 
 ---
 

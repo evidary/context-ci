@@ -6,7 +6,7 @@ A prompt, a tool description, an `AGENTS.md`, an MCP server list: these files ch
 
 It is one binary. It runs in your CI with no account, no key and no network call, and it never calls a model.
 
-**Status:** v0.9.0 in [`VERSION`](VERSION). **Pre-release:** this repository is private until the open-source launch planned for 16 December 2026, so until then the install lines below work only for someone with access. Nothing has run on a GitHub-hosted runner yet; [spec.md](docs/03-product/spec.md) §7 records what has been exercised and what has not.
+**Status:** v0.9.0 in [`VERSION`](VERSION). **Pre-release:** the repository is public and the announcement is planned for 16 December 2026; until then expect breaking changes. Its own CI, including the action on Linux, macOS and Windows, runs on GitHub-hosted runners; [spec.md](docs/03-product/spec.md) §7 records what has been exercised and what has not.
 **Licence:** Apache-2.0 · **Maintained by:** Evidary.
 
 ---
@@ -150,7 +150,7 @@ Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs
 
 ## Contributing
 
-External contributions are welcome once the repository is public. Until then it is pre-release. See [CONTRIBUTING.md](CONTRIBUTING.md).
+External contributions are welcome. The project is pre-release. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

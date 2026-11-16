@@ -1,6 +1,6 @@
 # Contributing to Context CI
 
-**Licence:** Apache-2.0. External contributions are welcome once the repository is public; until then the repository is pre-release and maintainers may restructure it freely.
+**Licence:** Apache-2.0. External contributions are welcome. The project is pre-release, and maintainers may still restructure it freely.
 
 ---
 
@@ -58,4 +58,4 @@ One maintainer approval. Two for a schema change, the paid boundary, or the lice
 
 ## Support
 
-Bugs: GitHub issues, using the template. Questions: GitHub Discussions, once the repository is public.
+Bugs: GitHub issues, using the template. Questions: GitHub Discussions.
