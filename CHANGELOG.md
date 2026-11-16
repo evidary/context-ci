@@ -100,8 +100,7 @@ on this date — the tests, the quickstart script, and the action's own steps ex
 **Documentation accuracy pass.** Every "planned", "not implemented" and "does not exist" claim
 was checked against the tree; every verb, flag and exit code in the docs against the
 dispatcher; every number re-derived or de-quantified; and every code comment read for the
-behaviour it describes. What follows in this entry is the code defects the audit found,
-which were fixed rather than documented.
+behaviour it describes. Code defects the audit found were fixed rather than documented.
 
 ## [0.7.0] — 2026-11-15
 

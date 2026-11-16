@@ -21,7 +21,7 @@ Constraints that actually bear on the choice:
    needs a Python venv and a resolver adds minutes and a failure mode.
 5. Five repositories, one company, no capital. The team is strongest in Go and
    already runs a Go 1.27 toolchain for `acp-core`.
-6. The capture path needs `ctxci.capture(...)` inside the customer's application, and
+6. The capture path needs an SDK call (`context_ci.capture(...)` in Python) inside the customer's application, and
    those applications are Python or TypeScript.
 
 ## Decision
@@ -53,7 +53,7 @@ libraries that write the capture file the CLI turns into a manifest.
 ## Consequences
 
 - `go.mod` pins a Go version; the release workflow builds for three operating
-  systems and signs the artefacts.
+  systems and publishes SHA-256 checksums beside the binaries. Nothing is signed yet.
 - The manifest is built in **one implementation**, Go. The SDKs in Python and
   TypeScript write the capture file that `manifest --capture` reads; they do not
   compute the manifest or its digest, so there is no second implementation to keep
@@ -71,6 +71,6 @@ libraries that write the capture file the CLI turns into a manifest.
 
 Expensive after the first public release: the manifest digest and therefore every
 stored manifest is tied to the canonicalisation, and the distribution story is
-tied to the binary. **Cheap until then** — before v0.1 there is no user, no stored
+tied to the binary. **Cheap until then** — before the first public release there is no user, no stored
 manifest and no install path to break, so the language could still change for the
 cost of the CLI code alone.

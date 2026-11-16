@@ -123,7 +123,7 @@ type Tool struct {
 }
 
 // Retrieval is the whole retrieval configuration. Changing any of it changes what
-// the model sees, which is why the diff treats most of it as a failure.
+// the model sees, which is why the diff reports a change to any field of it.
 type Retrieval struct {
 	IndexID               string  `json:"index_id"`
 	EmbeddingModel        string  `json:"embedding_model"`

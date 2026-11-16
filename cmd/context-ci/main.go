@@ -7,7 +7,8 @@
 //	0  nothing to report, or nothing above the threshold
 //	1  the gate failed: a change at or above the configured threshold
 //	2  usage or configuration error
-//	3  a manifest could not be read or is invalid
+//	3  an input could not be read or is invalid: a manifest, a configured source file or eval
+//	   results. module-manifest on an unreleased build and a serve failure use it too
 package main
 
 import (
@@ -52,7 +53,7 @@ usage:
   context-ci attribute [flags]    list the changed classes a regression is consistent with
   context-ci classes              list the diff classes and their defaults
 
-  context-ci module-manifest      write the platform's module-manifest.v1.json
+  context-ci module-manifest      write module-manifest.v1.json, for the optional platform integration
   context-ci serve [--addr]       GET /healthz and GET /readyz, so the manifest's health_path is real
   context-ci version              print the tool version
 
@@ -101,7 +102,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // version is set at build time by the release workflow. It is empty in every other build, and
 // filled in from the module version the toolchain recorded, so a binary installed with
-// `go install github.com/evidary/context-ci/cmd/context-ci@v0.4.1` reports that version instead of
+// `go install github.com/evidary/context-ci/cmd/context-ci@vX.Y.Z` reports that version instead of
 // "dev". A tool that cannot say which version it is cannot be quoted in a bug report, and its SARIF
 // results carry a tool version that means nothing to a consumer that dedupes by it.
 var version = ""
@@ -116,7 +117,7 @@ func init() {
 
 // resolveVersion prefers the linked value, because the release workflow knows the version of the
 // tree it tagged; otherwise the module version decides. Go stamps a build inside a checkout with
-// the nearest tag, so a local build reports e.g. "0.4.0+dirty"; "(devel)" is what it records when
+// the nearest tag, so a local build reports e.g. "X.Y.Z+dirty"; "(devel)" is what it records when
 // there is no VCS to ask, and "dev" is the honest answer there.
 func resolveVersion(linked, module string) string {
 	if linked != "" {

@@ -1,8 +1,8 @@
 // Package modulemanifest emits acp-core `module-manifest.v1.json`: what a platform needs in order to discover this
 // module, check its health and know which contracts it speaks.
 //
-// The contract requires `health_path`, and it requires it for a good reason — the control plane probes
-// modules the same way it probes itself. That requirement is what kept this file from existing: the product
+// The contract requires `health_path`, and it requires it for a good reason — a platform probes
+// the tools it discovers the same way it probes itself. That requirement is what kept this file from existing: the product
 // is a command-line tool, so it had no endpoint to name, and writing `/healthz` into a manifest without
 // serving one would be a claim that a probe against it succeeds. The answer was not to weaken the contract
 // or to fake the field, but to serve the endpoint (`context-ci serve`), which is why `module-manifest` and
@@ -73,7 +73,7 @@ var consumed = []versioned{
 	{"module-manifest.v1.json", "1.0.0"},
 }
 
-// published is empty, and that is the honest value rather than an oversight. This module's decision record
+// published is empty, and that is the honest value rather than an oversight. The context manifest
 // has no published JSON Schema — docs/05-contracts/README.md §3 says so — and `contracts_published` is a
 // claim that a consumer can fetch a schema. An empty list states that correctly; a version with no schema
 // behind it would not.

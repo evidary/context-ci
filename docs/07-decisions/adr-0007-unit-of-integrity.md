@@ -3,8 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-11-01
 - **Supersedes:** nothing
-- **Closes:** gap O9 in the acp-core review, and findings 1, 2 and 6 of the
-  capture review
+- **Closes:** three findings of an internal review of capture, and one of the platform's review of this tool
 - **Depends on:** [ADR-0002](adr-0002-implementation-language.md) (the manifest and its digest)
 
 ## Context
@@ -84,7 +83,7 @@ pinned for weeks against a check that did not exist.
 
 - An existing manifest with tools but no `description_hash` no longer validates. That
   is deliberate and it is a breaking change, but the alternative is a field that
-  silently means nothing. Nothing has been released, so no migration path is needed.
+  silently means nothing. Nothing has been released publicly, so no migration path is needed.
 - Capture must be run again to produce valid manifests. `context-ci` does not read
   old manifests into the new format; they are rejected with exit 3.
 - The manifest schema in the product specification is updated in the same change. A

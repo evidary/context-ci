@@ -1,5 +1,7 @@
 # Squad, operating model and metrics
 
+> **Planning document, kept for history.** It was written before the tool was built and records what the team intended and assumed at the time. Staffing, dates, targets, prices and features in it are plans: some have been overtaken, and several were never built. For what the tool does today read [spec.md](../03-product/spec.md) and [cli-reference.md](../03-product/cli-reference.md); where this page disagrees with them, they are right.
+
 **Owner:** Context CI squad · **Version:** 1.0.0 · **Date:** 29 October 2026
 
 ---

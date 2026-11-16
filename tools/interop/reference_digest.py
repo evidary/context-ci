@@ -3,7 +3,7 @@
 
 This exists so that the pinned digest in internal/manifest/manifest_test.go is a
 claim two implementations agree on, not a number the implementation produced and
-then remembered. It is the same discipline acp-core applies to its record digest.
+then remembered.
 
 The digest is sha256 over the RFC 8785 canonical form of the manifest with
 `created_at`, `digest` and `content` removed.
@@ -100,6 +100,10 @@ def canonicalise(value):
                 out.append("\\r")
             elif ch == "\t":
                 out.append("\\t")
+            elif ch == "\b":
+                out.append("\\b")
+            elif ch == "\f":
+                out.append("\\f")
             elif ord(ch) < 0x20:
                 out.append("\\u%04x" % ord(ch))
             else:

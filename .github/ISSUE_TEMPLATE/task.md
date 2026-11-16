@@ -24,13 +24,6 @@ and the index links the new file" is.
 
 ## Blast radius
 
-- [ ] Contracts (a published schema changes → contract set version bump, modules re-vendor)
-- [ ] Data (migration, retention, RLS)
-- [ ] Deployment (Helm, air-gap)
+- [ ] A published format changes (the manifest, an output format, an exit code): needs an ADR and a version bump
+- [ ] The action or the documented workflow changes
 - [ ] Documentation only
-
-## If this is a contract change
-
-- [ ] `docs/05-contracts/CHECKSUMS.txt` updated
-- [ ] `index.json` cross-checked
-- [ ] Every consuming module has an issue labelled `contract-update`

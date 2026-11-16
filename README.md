@@ -4,8 +4,8 @@
 
 Context CI records the context an AI feature is **declared** to run with — the prompt, tool and retrieval files in your repository, hashed, and the model, parameters, retrieval settings and policy version your `.context-ci.yaml` states — diffs it semantically between commits, and lists the context changes an eval regression is consistent with. It runs in your CI, with no account, no key and no network call.
 
-**Status:** v0.8.0 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. The 30-day build starts **17 November 2026**; open-source launch **16 December 2026**. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
-**Licence:** Apache-2.0 · **Part of:** one company, five repositories — this is one of four standalone modules.
+**Status:** v0.8.0 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. **Pre-release:** this repository is private until the open-source launch planned for 16 December 2026, so until then the install lines below work only for someone with access. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+**Licence:** Apache-2.0 · **Maintained by:** Evidary.
 
 ---
 
@@ -125,34 +125,28 @@ confounded and that it cannot tell them apart.
 
 ## Why it is a separate repository
 
-This is one of four standalone module repositories. It is Apache-2.0, useful with no platform account, and separately releasable. The platform company is a sibling repo (`acp-core`); the integration is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
+Context CI is Apache-2.0, useful with no platform account, and released by itself. Evidary also builds a platform for recording what AI agents do (`acp-core`); connecting the two is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
 
 Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs/07-decisions/adr-0001-standalone-product-repo.md).
 
-## Read this first
+## Where to read more
 
 | Question | Document |
 |---|---|
 | Where is everything? | [docs/00-index.md](docs/00-index.md) |
 | Why does this product deserve to exist? | [docs/01-thesis.md](docs/01-thesis.md) |
-| Who are the 45 competitors and what do they miss? | [docs/02-market/market-and-competitors.md](docs/02-market/market-and-competitors.md) |
-| What exactly are we building? | [docs/03-product/spec.md](docs/03-product/spec.md) |
-| What is the 30-day plan? | [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) |
-| What is the 15-week plan? | [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md) |
+| What exactly does it do, and what is out of scope? | [docs/03-product/spec.md](docs/03-product/spec.md) |
+| What does every command, flag and exit code mean? | [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) |
+| What is planned next? | [ROADMAP.md](ROADMAP.md) |
 | How does it talk to the platform? | [docs/05-contracts/README.md](docs/05-contracts/README.md) |
-| Who does the work? | [docs/06-operations/squad-and-metrics.md](docs/06-operations/squad-and-metrics.md) |
 
-## The honest risk
+## The limit to know about
 
-The most likely failure is not technical. It is that this becomes a well-loved open-source tool with a paid tier nobody buys, because the people who install it on a Saturday are not the people who approve a budget.
-
-The mitigation is in the plan, not in the pitch: the paid boundary is **history and attribution across repositories**, which a single developer never needs and a platform team always does. If five absorption events in the market this quarter teach anything (Humanloop into Anthropic, Launchable into CloudBees, W&B into CoreWeave, Keywords AI into Respan, Gitar into Sonar), it is that a standalone devtool with no team-level buyer gets absorbed.
-
-Section 8 of the market research is the full analysis.
+Context CI compares what your repository declares. A change made where the repository cannot see it — a prompt edited in a vendor dashboard, a model alias a provider moved — is not caught unless a file changes or the capture SDK records it. The section *What it sees at this version* above says exactly which fields are observed and which are declared.
 
 ## Contributing
 
-External contributions are welcome once v0.1 is public. Until then, this repository is pre-release. See [CONTRIBUTING.md](CONTRIBUTING.md).
+External contributions are welcome once the repository is public. Until then it is pre-release. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

@@ -1,43 +1,52 @@
 # Roadmap
 
-**Build window:** 17 November 2026 – 27 February 2027 · **Public launch:** 16 December 2026
-Full plan: [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) · [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md)
+**Status on 16 November 2026:** version 0.8.0, pre-release. The repository is private.
+**Public launch target:** 16 December 2026.
+
+The original plans are kept for history in [docs/04-plan/](docs/04-plan/30-day-launch.md). This page is
+what is true now.
 
 ---
 
-## The 30 days to launch
+## Built
 
-| Week | Dates | Ship | Gate |
-|---|---|---|---|
-| 1 | 17–23 Nov 2026 | Repository public, manifest schema v1, CLI skeleton, determinism harness | Schema review |
-| 2 | 24–30 Nov 2026 | Capture paths (asserted, instrumented), GitHub Action, first runner pass | Works on a real repo |
-| 3 | 1–7 Dec 2026 | Semantic diff, severity model, attribution v0, output formats | Seeded regression attributed correctly |
-| 4 | 8–16 Dec 2026 | Docs site, install path, launch post, v0.1.0 tag | **Public launch** |
+| Area | What exists |
+|---|---|
+| Capture | `manifest` from files and declared configuration (asserted); the rendered prompt hash from an SDK capture (instrumented). Python and TypeScript capture SDKs |
+| Compare | `diff`, with a severity for each class of change; `classes` lists them |
+| Gate | `check`, which builds its head from the working tree and exits 1 at or above the configured threshold |
+| Attribute | `attribute`, which lists the changed classes a regression in two eval runs is consistent with, and says when it can only correlate |
+| Setup | `init`, the GitHub Action in `action.yml`, and `examples/minimal` |
+| Output | Text, GitHub annotations, JSON, SARIF and JUnit |
+
+[docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) §8 lists what is not implemented.
+
+## Before the public launch
+
+| Item | Why it is not done |
+|---|---|
+| Run CI and the action on GitHub-hosted runners | Everything was run locally; nothing has run on a hosted runner yet |
+| Someone outside the team installs from the README | Impossible while the repository is private |
+| Tag the release the documents pin | The install lines name a version that has to exist as a tag |
+| Decide on signed releases and an SBOM | Releases carry SHA-256 checksums only |
+| Publish the manifest as a JSON Schema, with a stability promise | Open decision D-01 in [docs/07-decisions/README.md](docs/07-decisions/README.md) |
+| A way to contact the maintainers other than GitHub | No project mailbox exists yet |
 
 ## After launch
 
-| When | What |
+Plans, not commitments. Each depends on what the first users ask for.
+
+| Item | Note |
 |---|---|
-| 17 Dec 2026 – 15 Jan 2027 | Weeks 5–8: registry sources, more CI providers, attribution accuracy work, community triage |
-| 16 Jan – 15 Feb 2027 | Weeks 9–12: hosted history (Team tier), SSO groundwork, design-partner conversations |
-| 16–28 Feb 2027 | Weeks 13–15: paid tier decision gate, v0.2, first paying customers or a documented decision not to sell |
+| Prompts from a registry as a source | Undecided; it conflicts with the "no network call" requirement. See cli-reference §8 |
+| Observed capture beyond the prompt | Today the model, parameters and retrieval settings are declared, not observed |
+| Hosted history across repositories | The planned paid boundary. Nothing is built, and the decision whether to sell it is planned for the end of February 2027 |
 
-## Milestones
-
-| # | Milestone | Target | Definition of done |
-|---|---|---|---|
-| M1 | Manifest schema v1 published | 21 Nov 2026 | JSON Schema in the release artefact, versioned |
-| M2 | First real repository producing manifests | 30 Nov 2026 | Not a fixture; someone else's code |
-| M3 | Seeded regression attributed | 7 Dec 2026 | Correct entry named, evidence shown |
-| M4 | v0.1.0 public | 16 Dec 2026 | Tagged, signed, SBOM, docs site live |
-| M5 | 100 installs / 40 active repos | 31 Dec 2026 | Measured, not claimed |
-| M6 | Paid-tier decision | 28 Feb 2027 | Repositories with a platform-team contact ≥3 → sell; else stay free |
-
-## What we are not doing in this window
+## Not doing
 
 | Not doing | Why |
 |---|---|
-| A hosted control plane before the February gate | Cost and data-protection burden before demand is proven |
-| Prompt authoring or a registry UI | Different product; destroys the positioning |
-| More than three capture paths | Each path is a support surface |
-| Windows-first or IDE-first distribution | The adopter lives in CI |
+| An eval framework | Others do it well; this tool consumes their results |
+| Prompt authoring or a registry UI | A different product |
+| A model proxy or gateway | It would put the tool in the request path |
+| IDE-first distribution | The gate belongs in CI |

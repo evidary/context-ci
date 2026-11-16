@@ -9,7 +9,10 @@
 | ADR | Decision | Date | Status |
 |---|---|---|---|
 | [0001](adr-0001-standalone-product-repo.md) | Context CI is its own Apache-2.0 product repository with no dependency on the platform | 29 Oct 2026 | Accepted |
-| [0002](adr-0002-implementation-language.md) | Go for the CLI; Python and TypeScript for the capture SDKs | 29 Oct 2026 | Accepted |
+| [0002](adr-0002-implementation-language.md) | Go for the CLI; Python and TypeScript for the capture SDKs | 31 Oct 2026 | Accepted |
+| [0007](adr-0007-unit-of-integrity.md) | The unit of integrity is everything that steers the model: every such field is inside the digest | 1 Nov 2026 | Accepted |
+
+Numbers 0003 to 0006 are not used in this repository: the numbering was shared with other repositories when these were written.
 
 ## Decided without an ADR
 

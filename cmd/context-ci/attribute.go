@@ -11,7 +11,7 @@ import (
 	"github.com/evidary/context-ci/internal/diff"
 )
 
-// attributeCommand implements the fourth verb: given two manifests and two eval runs, list the
+// attributeCommand implements the attribute verb: given two manifests and two eval runs, list the
 // context changes the movement is consistent with, and say plainly when it cannot. It names
 // candidates; it does not establish a cause.
 func attributeCommand(args []string, stdout, stderr io.Writer) int {

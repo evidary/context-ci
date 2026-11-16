@@ -18,7 +18,7 @@ import (
 // It is deliberately not called `manifest`. This product already has a `manifest` verb, and it means something
 // else: the context manifest, context-manifest.json, for a checkout. Two documents with one name would be a
 // trap for whoever scripts against it, so the platform's discovery document gets the name of the contract it
-// emits — and that name is the same in every module of the portfolio.
+// emits — and that name is the same in every tool that speaks the contract.
 func runModuleManifest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("module-manifest", flag.ContinueOnError)
 	positional, code, ok := parseArgs(fs, "context-ci module-manifest", args, stdout, stderr)

@@ -15,7 +15,7 @@ a fifth capability. Anything that is not one of the four below is out of scope.
 |---|---|---|
 | **Capture** | `context-ci manifest` | Produces `context-manifest.json` for the current checkout |
 | **Compare** | `context-ci diff <base> <head>` | Semantic diff between two manifests |
-| **Attribute** | `context-ci attribute --baseline <base> --baseline-results <file> --results <file>` | Correlates a quality, cost or safety delta with diff entries |
+| **Attribute** | `context-ci attribute --baseline <base> --baseline-results <file> --results <file>` | Lists the diff entries a quality delta is consistent with (cost and safety deltas are not read yet; see below) |
 | **Gate** | `context-ci check` | Exits non-zero when the diff violates configured thresholds |
 
 Implementation status, so this table is not mistaken for a description of the binary:
@@ -49,8 +49,8 @@ The manifest must be produced **without asking the developer to restructure thei
 
 | Path | When it applies | Mechanism |
 |---|---|---|
-| **Instrumented** | The team will add a hook | A small SDK call at the point where the request is assembled (`ctxci.capture(...)`), which serialises the assembled request |
-| **Asserted** | The context is assembled from config files | Declarative `context-ci.yaml` lists the sources; the tool resolves and hashes them |
+| **Instrumented** | The team will add a hook | A small SDK call at the point where the request is assembled (`context_ci.capture(...)` in Python, `capture(...)` in TypeScript), which serialises the assembled request |
+| **Asserted** | The context is assembled from config files | Declarative `.context-ci.yaml` lists the sources; the tool resolves and hashes them |
 | **Observed** | Neither is possible yet | Read a request fixture or a recorded sample, and state clearly in the manifest that this is a sample, not the live path |
 
 Every manifest records **which path produced it**, because a sample-based manifest is weaker evidence and must never be presented as equivalent.
@@ -350,7 +350,7 @@ gate:
 
 The gate compares severities and never dollars: `calls_per_day` and `input_usd_per_mtok` only
 turn a token delta into a projection printed beside the entry, and a cost figure never fails a
-build by itself. `model.id` is required because a manifest with no model cannot be compared.
+build by itself. `model.provider` and `model.id` are required because a manifest with no model cannot be compared.
 
 ## 9. Requirements
 
@@ -369,6 +369,9 @@ build by itself. `model.id` is required because a manifest with no model cannot 
 
 ## 10. Pricing
 
+**Planned, not available.** Only the open-source row exists today. No hosted service has been built, and the
+prices below are a plan that has not been tested with a customer.
+
 | Plan | Price | Includes |
 |---|---|---|
 | Open source | Free | CLI, GitHub Action, local manifest, diff, attribution, gate |
@@ -384,7 +387,7 @@ build by itself. `model.id` is required because a manifest with no model cannot 
 2. A seeded regression is correctly attributed in a live demo.
 3. The action passes on the three major CI providers (GitHub Actions, GitLab CI, CircleCI) or the gap is documented with a date.
 4. `check` blocks a real pull request with a message a non-expert understands.
-5. The repository has no reference to any closed-source component.
+5. The repository builds, tests and runs with no closed-source component present.
 
 ## 12. Open questions
 
@@ -398,6 +401,6 @@ build by itself. `model.id` is required because a manifest with no model cannot 
 **Question 3 is answered: both, and neither is primary.** `--format sarif` is a SARIF 2.1.0 report
 for a consumer that reads one — its results carry no file location, so it lists changes rather than
 placing them on a file — `--format junit` is for a dashboard that only reads XML, and the action still defaults to `github`
-because an annotation on the changed line is cheaper to read than any report. See
+because an annotation on the pull request is cheaper to read than any report. See
 [cli-reference.md](cli-reference.md) §7 for how each severity is translated, and why a `warn` is
 not dressed up as a failure.

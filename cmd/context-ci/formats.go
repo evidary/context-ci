@@ -97,7 +97,7 @@ func writeSARIF(w io.Writer, r *diff.Result, toolVersion string) error {
 		}
 		run.Results = append(run.Results, item)
 	}
-	// SARIF requires rules and results to be ordered deterministically for a stable upload.
+	// Rules are sorted so the same diff renders byte-identically, which is what lets a report be committed or diffed.
 	sort.SliceStable(run.Tool.Driver.Rules, func(i, j int) bool {
 		return run.Tool.Driver.Rules[i].ID < run.Tool.Driver.Rules[j].ID
 	})

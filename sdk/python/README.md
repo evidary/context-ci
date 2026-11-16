@@ -14,7 +14,8 @@ pip install ./sdk/python          # or: pip install context-ci-capture, once pub
 context-ci manifest --capture context-capture.json
 ```
 
-No dependencies, no network, no account.
+No dependencies, no network, no account. For a chat-style request, `capture_messages(messages)` takes the
+list of messages instead of one string and records the text they render to.
 
 ## What it records, and what it does not
 

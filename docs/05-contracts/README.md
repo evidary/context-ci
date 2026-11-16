@@ -1,6 +1,6 @@
 # Contracts — what Context CI consumes, publishes and refuses
 
-**Contract set:** `acp-core@1.0.2` (vendored) · **Date:** 29 October 2026
+**Contract set:** `acp-core@1.0.2` (vendored) · **Date:** 16 November 2026
 
 ---
 
@@ -32,11 +32,11 @@ Vendored copies with digests: [vendor/acp-core@1.0.2/VENDORED.md](vendor/acp-cor
 | Artefact | Format | Stability |
 |---|---|---|
 | `context-manifest.json` | JSON, `manifest_version: 1` | Versioned by `manifest_version`; the stability promise is open decision D-01. A reader rejects a field it does not know, because an unknown field is outside the digest — so adding a field is not transparent to an older binary |
-| Manifest JSON Schema | JSON Schema 2020-12, shipped in the release artefacts | Published; the schema is the contract |
+| Manifest JSON Schema | JSON Schema 2020-12 | **Not yet published.** No schema file ships today; [spec.md](../03-product/spec.md) §4 and the reader in `internal/manifest` are the definition until open decision D-01 is settled |
 | Diff result | JSON + SARIF + JUnit | Stable within a major CLI version |
-| Regression attribution event | JSON, referenced by hash in a platform `action-record` payload | Stable within a major |
+| Regression attribution event | JSON, referenced by hash in a platform `action-record` payload | **Not implemented.** `attribute` writes a report; nothing emits an event |
 
-**The manifest schema is the single most important artefact this product owns.** Publishing it, and keeping it stable, is how a customer's own tooling can consume a manifest without depending on us. It is also the mechanism by which a platform can reference a manifest **by hash only** — the platform never needs the body.
+**The manifest schema is the single most important artefact this product owns.** Publishing it as a JSON Schema, and keeping it stable, is how a customer's own tooling can consume a manifest without depending on us. It is also the mechanism by which a platform can reference a manifest **by hash only** — the platform never needs the body.
 
 ## 4. The hash-reference integration
 

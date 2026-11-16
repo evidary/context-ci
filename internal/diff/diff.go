@@ -473,7 +473,7 @@ func contentHint(base, head *manifest.Manifest, kind string) string {
 	if hasContent(base, kind) && hasContent(head, kind) {
 		return "both manifests carry the captured text, so a text diff is possible"
 	}
-	return "content was not captured, so only the hash shows the change"
+	return "the manifests carry hashes only, so only the hash shows the change"
 }
 
 func hasContent(m *manifest.Manifest, kind string) bool {

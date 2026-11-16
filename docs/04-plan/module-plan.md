@@ -1,5 +1,7 @@
 # Plan 06 — Context CI
 
+> **Planning document, kept for history.** It was written before the tool was built and records what the team intended and assumed at the time. Staffing, dates, targets, prices and features in it are plans: some have been overtaken, and several were never built. For what the tool does today read [spec.md](../03-product/spec.md) and [cli-reference.md](../03-product/cli-reference.md); where this page disagrees with them, they are right.
+
 **Opportunity:** O6 — Context CI
 **Plan window:** 17 November 2026 – 27 February 2027; 30-day open-source launch 17 November – 16 December 2026
 **GA target:** open-source v0.1 on 16 December 2026; paid Team tier decided at the February 2027 gate

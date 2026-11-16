@@ -1,5 +1,7 @@
 # Market and competitors: Context CI
 
+> **Dated research, kept for history.** Written on 29 October 2026 and not re-checked since. Prices and company facts were observed on that date and may have changed. The "gap" assessments of other products are the authors' opinion, not established fact, and several ownership changes are inferred from a website redirect rather than from an announcement.
+
 **What this file is.**
 A market and competitor deep dive for Context CI, written on 29 October 2026, for the team that has to decide what to build and what to charge.
 Every price in it was re-observed on that date; every factual claim carries a numbered source resolved in section 12.
@@ -306,7 +308,7 @@ Ranked by expected installs per unit of effort for a team with no capital. Estim
 | Rank | Channel | Specific action | Effort | Expected first-year installs |
 |---|---|---|---|---|
 | 1 | Framework integrations | Ship first-class capture for OpenAI Agents SDK, LangChain/LangGraph, Vercel AI SDK, LlamaIndex; PR the snippet into their docs | 25 person-days | 250–500 |
-| 2 | GitHub Actions marketplace + reusable workflow | A one-line `uses: context-ci/gate@v1` step plus a copy-paste workflow; README optimised for search, not browse | 10 person-days | 150–400 |
+| 2 | GitHub Actions marketplace + reusable workflow | A one-line `uses: evidary/context-ci@<tag>` step plus a copy-paste workflow; README optimised for search, not browse | 10 person-days | 150–400 |
 | 3 | Design-partner outbound | 50 hand-picked teams with LLM features in production; install it for them on a call | 30 person-days | 40–80 (highest conversion, lowest scale) |
 | 4 | Comparison content | "Your eval suite passed and users still complained: what a trace cannot tell you", "LangSmith vs a context manifest" — honest, technical, with reproductions | 15 person-days | 100–250 |
 | 5 | Spec publication | Publish the manifest JSON Schema and a conformance suite; invite Langfuse/Opik/Phoenix to emit it | 12 person-days | 50–150 (compounding via citations) |

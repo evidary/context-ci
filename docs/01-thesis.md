@@ -91,7 +91,7 @@ If (4) fails, this is a well-loved open-source tool with no business — which i
 
 ## 8. Why this repo, why this licence
 
-Apache-2.0 because the credibility of this product is the point. It is the one thing in the portfolio that a stranger can read end to end and conclude the team is real. It must be forkable, readable and free of references to closed code.
+Apache-2.0 because the credibility of this product is the point. A stranger must be able to read it end to end, fork it, and build and run it with nothing closed-source present.
 
 Repository separation is recorded in [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md).
 

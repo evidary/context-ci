@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Report a suspected vulnerability privately to the maintainers. Do not open a public issue. If this repository has a private security advisory channel enabled, use it.
+Report a suspected vulnerability privately, through GitHub's private vulnerability reporting form: <https://github.com/evidary/context-ci/security/advisories/new>. Do not open a public issue.
 
 Include: what you tested, what you expected, what happened, and whether customer data or credentials could be exposed.
 
@@ -13,7 +13,7 @@ Include: what you tested, what you expected, what happened, and whether customer
 | Credential exposure | A secret written to a log, an artefact, a cache or a manifest |
 | Outbound data | Any network call that this product's documentation says it never makes |
 | Injection | A crafted input that causes code execution or path traversal in the CLI or action |
-| Supply chain | An unsigned artefact, a missing SBOM, an unpinned dependency |
+| Supply chain | A release binary that does not match its `SHA256SUMS` entry, an unpinned dependency |
 | Licence contamination | A dependency whose licence is incompatible with Apache-2.0 |
 | Contract integrity | A vendored contract file that can be modified without CI failing |
 
@@ -25,6 +25,8 @@ Include: what you tested, what you expected, what happened, and whether customer
 
 ## Response
 
+These are targets for a small team, not a guarantee.
+
 | Severity | Acknowledge | Fix target |
 |---|---|---|
 | Credential exposure or code execution | 24 hours | 7 days |
@@ -34,6 +36,6 @@ Include: what you tested, what you expected, what happened, and whether customer
 
 ## Handling
 
-- No secret in git. CI fails on a detected secret.
+- No secret in git. There is no automated secret scan in CI yet, so this rests on review.
 - This product holds no model keys, no customer data and no credentials by design. If you find that it does, that is a critical bug, not a configuration issue.
-- Released artefacts are signed and shipped with an SBOM.
+- Release binaries ship with a `SHA256SUMS` file. They are not signed and there is no SBOM yet.

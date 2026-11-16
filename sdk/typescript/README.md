@@ -63,6 +63,7 @@ npm test
 To also prove the CLI accepts what this SDK writes, point `CONTEXT_CI_BIN` at a built binary:
 
 ```bash
+# from the repository root
 go build -o bin/context-ci ./cmd/context-ci
-CONTEXT_CI_BIN=$PWD/bin/context-ci npm test
+cd sdk/typescript && CONTEXT_CI_BIN="$PWD/../../bin/context-ci" npm test
 ```

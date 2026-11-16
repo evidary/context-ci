@@ -1,5 +1,7 @@
 # Context CI — 30-Day Open-Source Launch Plan
 
+> **Planning document, kept for history.** It was written before the tool was built and records what the team intended and assumed at the time. Staffing, dates, targets, prices and features in it are plans: some have been overtaken, and several were never built. For what the tool does today read [spec.md](../03-product/spec.md) and [cli-reference.md](../03-product/cli-reference.md); where this page disagrees with them, they are right.
+
 **Start:** 17 November 2026 · **Launch:** 16 December 2026 · **Day 30:** 16 December 2026  
 **Squad:** 4 engineers + 1 DevRel + 0.5 platform + 0.3 design + 0.2 security  
 **Note:** the 4 engineers are the Context CI squad; DevRel, Platform, Design and Security are fractional shared-squad allocations, not additional headcount.  
