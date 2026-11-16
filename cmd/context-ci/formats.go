@@ -28,12 +28,25 @@ func writeSARIF(w io.Writer, r *diff.Result, toolVersion string) error {
 			Level string `json:"level"`
 		} `json:"defaultConfiguration"`
 	}
+	type region struct {
+		StartLine int `json:"startLine"`
+	}
+	type location struct {
+		PhysicalLocation struct {
+			ArtifactLocation struct {
+				URI string `json:"uri"`
+			} `json:"artifactLocation"`
+			Region *region `json:"region,omitempty"`
+		} `json:"physicalLocation"`
+	}
 	type result struct {
 		RuleID  string `json:"ruleId"`
 		Level   string `json:"level"`
 		Message struct {
 			Text string `json:"text"`
 		} `json:"message"`
+		// Present when the change is in a file, so a code-scanning view can open it there.
+		Locations  []location        `json:"locations,omitempty"`
 		Properties map[string]string `json:"properties,omitempty"`
 	}
 	document := struct {
@@ -86,6 +99,20 @@ func writeSARIF(w io.Writer, r *diff.Result, toolVersion string) error {
 		item := result{RuleID: string(entry.Class), Level: sarifLevel(entry.Severity)}
 		item.Message.Text = entry.Summary
 		properties := map[string]string{}
+		if entry.Acknowledged {
+			// Still a result, so the record of the change survives; no longer an error, because
+			// somebody accepted it.
+			item.Level = "note"
+			properties["acknowledged"] = "true"
+		}
+		if entry.Path != "" {
+			var at location
+			at.PhysicalLocation.ArtifactLocation.URI = entry.Path
+			if entry.Line > 0 {
+				at.PhysicalLocation.Region = &region{StartLine: entry.Line}
+			}
+			item.Locations = []location{at}
+		}
 		if entry.Before != "" {
 			properties["before"] = entry.Before
 		}
@@ -161,11 +188,18 @@ func writeJUnit(w io.Writer, r *diff.Result) error {
 		if entry.Before != "" || entry.After != "" {
 			message = fmt.Sprintf("%s (%s -> %s)", message, orDash(entry.Before), orDash(entry.After))
 		}
-		switch entry.Severity {
-		case diff.SeverityFail:
+		if at := location(entry); at != "" {
+			message += " at " + at
+		}
+		switch {
+		case entry.Acknowledged:
+			item.SystemOut = &struct {
+				Body string `xml:",chardata"`
+			}{Body: "acknowledged: " + message}
+		case entry.Severity == diff.SeverityFail:
 			item.Failure = &failure{Message: message, Body: entry.Detail}
 			out.Failures++
-		case diff.SeverityWarn:
+		case entry.Severity == diff.SeverityWarn:
 			item.SystemOut = &struct {
 				Body string `xml:",chardata"`
 			}{Body: "warning: " + message}

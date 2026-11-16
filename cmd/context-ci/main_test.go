@@ -327,9 +327,30 @@ func TestUsageErrors(t *testing.T) {
 	}
 }
 
-func TestMissingConfigIsAUsageError(t *testing.T) {
+// TestNoConfigurationUsesTheDefaults: a repository nobody has configured still has coding-agent
+// files worth comparing, so the default file being absent is not an error. The run says which
+// configuration it used, because a team that expected its own file to be read needs to know it
+// was not.
+func TestNoConfigurationUsesTheDefaults(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "AGENTS.md", "Run the tests.\n")
 	var stdout, stderr bytes.Buffer
-	code := run([]string{"manifest", "--root", t.TempDir(), "--commit", "abc"}, &stdout, &stderr)
+	if code := run([]string{"manifest", "--root", root, "--commit", "abc"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("exit = %d, want %d: %s", code, ExitOK, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "the defaults are in use") {
+		t.Fatalf("the run does not say it used the defaults: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"path": "AGENTS.md"`) || strings.Contains(stdout.String(), `"model"`) {
+		t.Fatalf("the default manifest should list the agent file and declare no model:\n%s", stdout.String())
+	}
+}
+
+// TestANamedConfigurationThatIsMissingIsAUsageError: a path somebody wrote is a path they meant.
+func TestANamedConfigurationThatIsMissingIsAUsageError(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"manifest", "--root", root, "--config", filepath.Join(root, "nope.yaml"), "--commit", "abc"}, &stdout, &stderr)
 	if code != ExitUsage {
 		t.Fatalf("exit = %d, want %d", code, ExitUsage)
 	}

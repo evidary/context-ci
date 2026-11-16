@@ -10,9 +10,10 @@
 //
 //  1. Serialisation is canonical: keys sorted by UTF-16 code unit, no
 //     insignificant whitespace, no floats anywhere in the document.
-//  2. created_at is excluded from the digest. It is the only field allowed to
-//     differ between two runs over the same inputs, because a timestamp is not a
-//     property of the context.
+//  2. created_at and commit are excluded from the digest. Neither is a property of
+//     the context: the same files and the same declared values are the same context
+//     at any commit and at any time, and a digest that said otherwise could not
+//     identify a configuration.
 package manifest
 
 import (
@@ -28,8 +29,12 @@ import (
 	"unicode/utf16"
 )
 
-// Version is the manifest schema version this package writes.
-const Version = 1
+// Version is the manifest schema version this package writes and the only one it reads.
+//
+// Version 2 differs from version 1 in four ways: the digest no longer covers commit, model and
+// prompt are optional, files lists every file matched by a named group, and a hidden-character
+// count is recorded beside each hash of text a model reads.
+const Version = 2
 
 // Capture paths, in order of strength. A sample-based manifest is weaker
 // evidence, and the field exists so it can never be presented as equivalent.
@@ -67,15 +72,20 @@ var (
 // of a digest that two implementations must agree on.
 var ErrFloat = errors.New("manifest: floating point values are not permitted")
 
-// Manifest is context-manifest.json, schema version 1.
+// Manifest is context-manifest.json, schema version 2.
+//
+// Model and Prompt are omitted when the configuration declares none: a repository that gates only
+// its agent instruction files calls no model of its own, and a placeholder written in their place
+// would be a declaration nobody made.
 type Manifest struct {
 	ManifestVersion int       `json:"manifest_version"`
 	CreatedAt       string    `json:"created_at"`
 	Commit          string    `json:"commit"`
 	Capture         Capture   `json:"capture"`
-	Model           Model     `json:"model"`
-	Prompt          Prompt    `json:"prompt"`
+	Model           Model     `json:"model,omitzero"`
+	Prompt          Prompt    `json:"prompt,omitzero"`
 	Tools           []Tool    `json:"tools"`
+	Files           []File    `json:"files"`
 	Retrieval       Retrieval `json:"retrieval"`
 	Policy          Policy    `json:"policy"`
 	Digest          string    `json:"digest,omitempty"`
@@ -112,6 +122,28 @@ type Prompt struct {
 	RenderedHash       string            `json:"rendered_hash"`
 	RenderedSampleHash *string           `json:"rendered_sample_hash"`
 	Variables          map[string]string `json:"variables"`
+	// HiddenCharacters counts the invisible characters in the template. See File.
+	HiddenCharacters int `json:"hidden_characters,omitempty"`
+}
+
+// IsZero reports whether no prompt was captured, which is what omits the field from the document.
+func (p Prompt) IsZero() bool { return p.TemplateHash == "" && p.RenderedHash == "" }
+
+// IsZero reports whether no model was declared.
+func (m Model) IsZero() bool {
+	return m.Provider == "" && m.ID == "" && m.AliasOf == nil && m.Params == (ModelParam{})
+}
+
+// File is one file matched by a named group: a prompt fragment, a few-shot file, an agent
+// instruction file. Path is relative to the root and always written with forward slashes.
+type File struct {
+	Group string `json:"group"`
+	Path  string `json:"path"`
+	Hash  string `json:"hash"`
+	// HiddenCharacters counts characters a reviewer cannot see and a model can read: Unicode tag
+	// characters, bidirectional overrides and zero-width characters. The count is part of the
+	// digest, so a file that gains one is a change even if its visible text is the same.
+	HiddenCharacters int `json:"hidden_characters,omitempty"`
 }
 
 // Tool is one callable the model can reach.
@@ -120,6 +152,8 @@ type Tool struct {
 	SchemaHash        string  `json:"schema_hash"`
 	DescriptionHash   *string `json:"description_hash"`
 	DescriptionTokens int     `json:"description_tokens"`
+	// HiddenCharacters counts the invisible characters in the description. See File.
+	HiddenCharacters int `json:"hidden_characters,omitempty"`
 }
 
 // Retrieval is the whole retrieval configuration. Changing any of it changes what
@@ -179,9 +213,9 @@ func (c Content) Validate() error {
 }
 
 // Compute sets Digest and returns it. The digest covers the document with
-// created_at, digest and content removed: a timestamp is not part of the context,
-// content is deliberately redundant with its hash, and a digest cannot cover
-// itself.
+// created_at, commit, digest and content removed: neither a timestamp nor a commit
+// is part of the context, content is deliberately redundant with its hash, and a
+// digest cannot cover itself.
 func (m *Manifest) Compute() (string, error) {
 	if err := m.Validate(); err != nil {
 		return "", err
@@ -213,6 +247,7 @@ func (m *Manifest) digestBody() (map[string]any, error) {
 		return nil, fmt.Errorf("manifest: decode: %w", err)
 	}
 	delete(generic, "created_at")
+	delete(generic, "commit")
 	delete(generic, "digest")
 	delete(generic, "content")
 	return generic, nil
@@ -223,6 +258,8 @@ func (m *Manifest) digestBody() (map[string]any, error) {
 // "nothing changed" for something that was never recorded.
 func (m *Manifest) Validate() error {
 	switch {
+	case m.ManifestVersion == 1:
+		return errors.New("manifest: version 1 was written by context-ci 0.8 or earlier and is not read by this version; build it again")
 	case m.ManifestVersion != Version:
 		return fmt.Errorf("manifest: version %d is not supported, want %d", m.ManifestVersion, Version)
 	case m.Commit == "":
@@ -235,11 +272,15 @@ func (m *Manifest) Validate() error {
 	default:
 		return fmt.Errorf("manifest: capture.path %q is not one of instrumented, asserted, observed", m.Capture.Path)
 	}
-	if m.Model.ID == "" {
-		return errors.New("manifest: model.id is required")
-	}
-	if !IsProvider(m.Model.Provider) {
-		return fmt.Errorf("manifest: model.provider %q is not one of %s", m.Model.Provider, strings.Join(Providers, ", "))
+	// A model is optional, and all or nothing: an id with no provider, or parameters for a model
+	// nobody named, is a half-written declaration and not an absent one.
+	if !m.Model.IsZero() {
+		if m.Model.ID == "" {
+			return errors.New("manifest: model.id is required when a model is declared")
+		}
+		if !IsProvider(m.Model.Provider) {
+			return fmt.Errorf("manifest: model.provider %q is not one of %s", m.Model.Provider, strings.Join(Providers, ", "))
+		}
 	}
 	// Sampling values are strings so that they never depend on float formatting, which only helps
 	// if the string is a number: "hot" would hash, diff and gate like any other value.
@@ -277,18 +318,41 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("manifest: %s is not 64 hex characters", h.what)
 		}
 	}
-	if m.Prompt.TemplateHash == "" || m.Prompt.RenderedHash == "" {
-		return errors.New("manifest: prompt.template_hash and prompt.rendered_hash are required")
+	if m.Prompt.IsZero() {
+		if m.Prompt.RenderedSampleHash != nil || len(m.Prompt.Variables) > 0 || m.Prompt.HiddenCharacters != 0 {
+			return errors.New("manifest: prompt carries details but no template_hash")
+		}
+	} else {
+		for _, h := range []struct {
+			what  string
+			value string
+		}{
+			{"prompt.template_hash", m.Prompt.TemplateHash},
+			{"prompt.rendered_hash", m.Prompt.RenderedHash},
+		} {
+			if !isSHA256Hex(h.value) {
+				return fmt.Errorf("manifest: %s is not 64 hex characters", h.what)
+			}
+		}
+		if m.Prompt.HiddenCharacters < 0 {
+			return errors.New("manifest: prompt.hidden_characters cannot be negative")
+		}
 	}
-	for _, h := range []struct {
-		what  string
-		value string
-	}{
-		{"prompt.template_hash", m.Prompt.TemplateHash},
-		{"prompt.rendered_hash", m.Prompt.RenderedHash},
-	} {
-		if !isSHA256Hex(h.value) {
-			return fmt.Errorf("manifest: %s is not 64 hex characters", h.what)
+	files := make(map[[2]string]bool, len(m.Files))
+	for _, f := range m.Files {
+		if f.Group == "" || f.Path == "" {
+			return errors.New("manifest: every file needs a group and a path")
+		}
+		key := [2]string{f.Group, f.Path}
+		if files[key] {
+			return fmt.Errorf("manifest: file %q appears twice in group %q", f.Path, f.Group)
+		}
+		files[key] = true
+		if !isSHA256Hex(f.Hash) {
+			return fmt.Errorf("manifest: file %q hash is not 64 hex characters", f.Path)
+		}
+		if f.HiddenCharacters < 0 {
+			return fmt.Errorf("manifest: file %q hidden_characters cannot be negative", f.Path)
 		}
 	}
 	seen := make(map[string]bool, len(m.Tools))
@@ -305,6 +369,9 @@ func (m *Manifest) Validate() error {
 		}
 		if t.DescriptionTokens < 0 {
 			return fmt.Errorf("manifest: tool %q description_tokens is %d and cannot be negative", t.Name, t.DescriptionTokens)
+		}
+		if t.HiddenCharacters < 0 {
+			return fmt.Errorf("manifest: tool %q hidden_characters cannot be negative", t.Name)
 		}
 	}
 	// A tool's description steers the model as much as its schema does, and the only

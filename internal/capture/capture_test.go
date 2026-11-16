@@ -152,86 +152,70 @@ func TestToolsAreSortedAndHashed(t *testing.T) {
 	}
 }
 
-// TestCredentialFieldsDoNotAffectTheHash is requirement C-07. A schema that carries
-// a token in a default value must not let it change the manifest, because the
-// manifest is committed to a repository.
-func TestCredentialFieldsDoNotAffectTheHash(t *testing.T) {
-	withoutSecret := `tools:
-  - name: a
-    description: d
-    schema:
-      type: object
-      properties:
-        order_id: {type: string}
-`
-	withSecret := `tools:
-  - name: a
-    description: d
-    schema:
-      type: object
-      properties:
-        order_id: {type: string}
-        api_key: {type: string, default: "sk-live-abcdef123456"}
-`
-	rootA := t.TempDir()
-	write(t, rootA, "p.md", "prompt\n")
-	write(t, rootA, "tools.yaml", withoutSecret)
-	rootB := t.TempDir()
-	write(t, rootB, "p.md", "prompt\n")
-	write(t, rootB, "tools.yaml", withSecret)
-
-	cfg := func() *config.Config {
-		return &config.Config{
-			Version: 1,
-			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
-				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
-			}},
-			Model: config.Model{Provider: "other", ID: "m"},
-		}
+// toolHash builds a manifest from one tools file and returns the first tool's schema hash.
+func toolHash(t *testing.T, tools string) string {
+	t.Helper()
+	root := t.TempDir()
+	write(t, root, "p.md", "prompt\n")
+	write(t, root, "tools.yaml", tools)
+	cfg := &config.Config{
+		Version: 1,
+		Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
+			config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
+		}},
+		Model: config.Model{Provider: "other", ID: "m"},
 	}
-	at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-	a := build(t, cfg(), rootA, at)
-	b := build(t, cfg(), rootB, at)
-	if a.Tools[0].SchemaHash != b.Tools[0].SchemaHash {
-		t.Fatal("a credential-shaped field changed the schema hash")
+	return build(t, cfg, root, time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)).Tools[0].SchemaHash
+}
+
+const credentialSchema = "tools:\n  - name: a\n    description: d\n    schema:\n      type: object\n      properties:\n        order_id: {type: string}\n"
+
+// TestCredentialValuesDoNotAffectTheHash is requirement C-07. A schema that carries a token in a
+// default value must not let that token change the manifest: rotating it would be reported as a
+// change to the tool.
+func TestCredentialValuesDoNotAffectTheHash(t *testing.T) {
+	first := credentialSchema + "        api_key: {type: string, default: \"first-secret-value\"}\n"
+	second := credentialSchema + "        api_key: {type: string, default: \"rotated-secret-value\"}\n"
+	if toolHash(t, first) != toolHash(t, second) {
+		t.Fatal("rotating the default of a credential-named parameter changed the schema hash")
+	}
+	// A credential stored directly under its own name, outside any property definition.
+	if toolHash(t, credentialSchema+"      auth: one\n") != toolHash(t, credentialSchema+"      auth: two\n") {
+		t.Fatal("a string under a credential-named key changed the schema hash")
 	}
 }
 
 // TestCredentialSpellings covers the names an exact match on the snake_case form
 // missed. A schema field called accessToken took a different value on every run
-// and changed the digest, which is the exact failure stripping exists to prevent.
+// and changed the digest, which is the exact failure redaction exists to prevent.
 func TestCredentialSpellings(t *testing.T) {
-	secret := "sk-live-abcdef123456"
 	for _, field := range []string{
 		"api_key", "apiKey", "api-key", "API_KEY",
 		"access_token", "accessToken", "access-token",
 		"privateKey", "private_key", "refreshToken", "clientSecret",
 		"secretKey", "subscriptionKey", "connectionString", "passphrase",
 	} {
-		base := "tools:\n  - name: a\n    description: d\n    schema:\n      type: object\n      properties:\n        order_id: {type: string}\n"
-		withSecret := base + "        " + field + ": {type: string, default: \"" + secret + "\"}\n"
-
-		rootA, rootB := t.TempDir(), t.TempDir()
-		write(t, rootA, "p.md", "prompt\n")
-		write(t, rootA, "tools.yaml", base)
-		write(t, rootB, "p.md", "prompt\n")
-		write(t, rootB, "tools.yaml", withSecret)
-
-		cfg := func() *config.Config {
-			return &config.Config{
-				Version: 1,
-				Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
-					config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
-				}},
-				Model: config.Model{Provider: "other", ID: "m"},
-			}
+		first := credentialSchema + "        " + field + ": {type: string, default: \"value-one\", enum: [\"value-one\"]}\n"
+		second := credentialSchema + "        " + field + ": {type: string, default: \"value-two\", enum: [\"value-two\"]}\n"
+		if toolHash(t, first) != toolHash(t, second) {
+			t.Fatalf("field %q was not redacted: its value changed the schema hash", field)
 		}
-		at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-		a := build(t, cfg(), rootA, at)
-		b := build(t, cfg(), rootB, at)
-		if a.Tools[0].SchemaHash != b.Tools[0].SchemaHash {
-			t.Fatalf("field %q was not stripped: the secret changed the schema hash", field)
-		}
+	}
+}
+
+// TestACredentialNamedParameterIsStillPartOfTheSchema is the defect redaction used to have. Every
+// credential-named key was dropped from the hash input, including the definition of a parameter
+// called token or auth, so adding one, removing one or changing its type was invisible to the
+// gate. Only the values are hidden now.
+func TestACredentialNamedParameterIsStillPartOfTheSchema(t *testing.T) {
+	without := toolHash(t, credentialSchema)
+	asString := toolHash(t, credentialSchema+"        token: {type: string}\n")
+	asInteger := toolHash(t, credentialSchema+"        token: {type: integer}\n")
+	if without == asString {
+		t.Fatal("adding a parameter named token did not change the schema hash")
+	}
+	if asString == asInteger {
+		t.Fatal("changing the type of a parameter named token did not change the schema hash")
 	}
 }
 

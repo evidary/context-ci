@@ -12,7 +12,7 @@ func base() *manifest.Manifest {
 	filters := strings.Repeat("f", 64)
 	guard := strings.Repeat("9", 64)
 	return &manifest.Manifest{
-		ManifestVersion: 1,
+		ManifestVersion: 2,
 		CreatedAt:       "2026-12-01T10:00:00Z",
 		Commit:          "9c1f2ab",
 		Capture:         manifest.Capture{Path: manifest.CaptureAsserted},
@@ -106,7 +106,7 @@ func TestClassifiesTheTenSpecifiedClasses(t *testing.T) {
 		{
 			name: "tool schema changed", class: ClassTools, want: SeverityFail,
 			mutate:  func(m *manifest.Manifest) { m.Tools[0].SchemaHash = strings.Repeat("2", 64) },
-			summary: "schema of tool",
+			summary: "definition of tool",
 		},
 		{
 			name: "tool description grew", class: ClassToolDescriptionTokens, want: SeverityWarn,
@@ -126,7 +126,7 @@ func TestClassifiesTheTenSpecifiedClasses(t *testing.T) {
 		{
 			name: "retrieval.filters_hash changed", class: ClassRetrievalFiltersHash, want: SeverityFail,
 			mutate:  func(m *manifest.Manifest) { m.Retrieval.FiltersHash = strPtr(strings.Repeat("0", 64)) },
-			summary: "the retrieval filter changed",
+			summary: "the retrieval configuration file changed",
 		},
 		{
 			name: "policy.version changed", class: ClassPolicyVersion, want: SeverityFail,
@@ -177,6 +177,15 @@ func TestEveryClassIsReachable(t *testing.T) {
 		ClassRetrievalChunker:      func(m *manifest.Manifest) { m.Retrieval.Chunker = "fixed-400" },
 		ClassPolicyGuardrailsHash:  func(m *manifest.Manifest) { m.Policy.GuardrailsHash = nil },
 		ClassCapturePath:           func(m *manifest.Manifest) { m.Capture.Path = manifest.CaptureObserved },
+		ClassAgentInstructions: func(m *manifest.Manifest) {
+			m.Files = append(m.Files, manifest.File{Group: "agent.instructions", Path: "AGENTS.md", Hash: strings.Repeat("6", 64)})
+		},
+		ClassAgentConfig: func(m *manifest.Manifest) {
+			m.Files = append(m.Files, manifest.File{Group: "agent.config", Path: ".mcp.json", Hash: strings.Repeat("7", 64)})
+		},
+		ClassHiddenCharacters: func(m *manifest.Manifest) {
+			m.Files = append(m.Files, manifest.File{Group: "agent.instructions", Path: "AGENTS.md", Hash: strings.Repeat("6", 64), HiddenCharacters: 4})
+		},
 	}
 
 	for _, class := range Classes() {

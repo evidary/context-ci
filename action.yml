@@ -1,33 +1,54 @@
 name: Context CI
-description: Catch the prompt, tool or retrieval change that broke your AI feature, before it merges.
+description: See what a pull request changes in the prompts, tools and agent instructions an AI feature runs with, and gate it.
 author: Evidary
 branding:
   icon: git-pull-request
   color: purple
 
 # A composite action rather than a Docker or JavaScript one: the tool is a single static Go
-# binary, and a container would add a pull to every job that uses it. With no version input the
-# binary is built from this action's own checkout, so the ref a workflow names and the code that
-# runs are the same commit — and no release asset has to exist for the action to work.
+# binary, and a container would add a pull to every job that uses it.
+#
+# Where the binary comes from, in order:
+#   1. a release asset, when the workflow names a release (`evidary/context-ci@v1.2.3`, or the
+#      `version` input). It is checked against the release's SHA256SUMS before it is run.
+#   2. a build of this action's own checkout, when the ref is a branch or a commit, or when no
+#      asset can be downloaded. That needs a Go toolchain, which the action installs if the runner
+#      has none.
 #
 # This file is at the repository root, so a workflow names it as `evidary/context-ci@<ref>`. There
 # is no `action/` subdirectory: `evidary/context-ci/action@<ref>` does not resolve.
 
 inputs:
   command:
-    description: "manifest writes a manifest; check compares the baseline with the working tree and fails the job above the threshold; attribute lists the changed context classes a movement in two eval runs is consistent with."
+    description: "check compares a baseline with the working tree and fails the job above the threshold; manifest writes a manifest; attribute (experimental) lists the changed context classes a movement in two eval runs is consistent with."
     required: false
     default: check
-  baseline:
-    description: "Path to the baseline manifest. Required for check and attribute: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is. For a pull request it should be the manifest committed on the base branch."
+  base-ref:
+    description: "check: the git ref to compare with. The baseline is built from the commit where this branch left that ref, so nothing has to be committed to the repository. On a pull request it defaults to the base branch. The checkout needs history: use actions/checkout with fetch-depth: 0."
     required: false
     default: ""
+  baseline:
+    description: "Path to a baseline manifest file, instead of base-ref. Required for attribute."
+    required: false
+    default: ""
+  acknowledge:
+    description: "check: comma-separated diff classes whose changes are accepted for this run, or `all`. An acknowledged change is still reported and no longer fails the job. `all` does not cover hidden_characters, which has to be named."
+    required: false
+    default: ""
+  summary:
+    description: "check: write the report, with the text of what changed, to the job summary. Set to false to leave the summary alone."
+    required: false
+    default: "true"
+  text:
+    description: "check: include the changed lines of prompt, tool and instruction files in the report. Set to false where the job log is readable by people who cannot read the repository."
+    required: false
+    default: "true"
   head:
-    description: "Path to a head manifest. Leave it empty for check: the head is then built from the working tree on every run, so a stale or identical file can never stand in for it, and naming the baseline here is refused. manifest writes to this path, and attribute reads it; both use context-manifest.json when it is empty. attribute never builds one: an attribution is about the manifest the eval ran against."
+    description: "Path to a head manifest. Leave it empty for check: the head is then built from the working tree on every run. manifest writes to this path, and attribute reads it; both use context-manifest.json when it is empty."
     required: false
     default: ""
   baseline-results:
-    description: "Path to the baseline eval results. Required for attribute, which needs both runs to say what moved."
+    description: "Path to the baseline eval results. Required for attribute."
     required: false
     default: ""
   results:
@@ -35,35 +56,99 @@ inputs:
     required: false
     default: ""
   root:
-    description: "Repository root, for finding .context-ci.yaml. Defaults to the working directory."
+    description: "The project directory, for finding .context-ci.yaml and the files it names. Defaults to the working directory."
     required: false
     default: ""
   config:
-    description: "Path to .context-ci.yaml, for severity overrides."
+    description: "Path to .context-ci.yaml, when it is not at the root."
     required: false
     default: ""
   format:
-    description: "check: text, github, json, sarif or junit. attribute: text, github or json. github writes annotations onto the pull request; sarif and junit write a report for code scanning or a dashboard."
+    description: "check: text, github, json, sarif or junit. attribute: text, github or json. github writes annotations onto the changed lines of the pull request."
     required: false
     default: github
   version:
-    description: "Install a released module version with go install instead of building this action's checkout. Leave empty to build the commit this ref names."
+    description: "A release to run, such as v1.2.3, instead of the one this action's ref names."
     required: false
     default: ""
 
 outputs:
   manifest:
-    description: "The manifest path that manifest wrote, or the head that check or attribute read. Empty when check built its head from the working tree, because that head is not written anywhere."
+    description: "The manifest path that manifest wrote, or the head that check or attribute read. Empty when check built its head from the working tree."
     value: ${{ steps.run.outputs.manifest }}
 
 runs:
   using: composite
   steps:
-    # The binary is built from source, so a Go toolchain is needed. A runner that has one keeps it
-    # untouched; a runner that has none gets the version this action's own go.mod names, so the
-    # action works without a setup-go step in the calling workflow.
+    - name: Download context-ci
+      id: download
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        # Read before any nested `uses:` step runs: these describe this action only until then.
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        SERVER_URL: ${{ github.server_url }}
+      run: |
+        set -uo pipefail
+        echo "installed=false" >> "$GITHUB_OUTPUT"
+
+        tag="$INPUT_VERSION"
+        if [ -z "$tag" ] && [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then tag="$ACTION_REF"; fi
+        if [ -z "$tag" ]; then
+          echo "no release is named (ref: ${ACTION_REF:-none}), so context-ci is built from this action's checkout"
+          exit 0
+        fi
+        case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+        case "${RUNNER_OS:-}" in
+          Linux) os=linux ;; macOS) os=darwin ;; Windows) os=windows ;; *) os="" ;;
+        esac
+        case "${RUNNER_ARCH:-}" in
+          X64) arch=amd64 ;; ARM64) arch=arm64 ;; *) arch="" ;;
+        esac
+        ext=""
+        if [ "$os" = "windows" ]; then ext=".exe"; fi
+        if [ -z "$os" ] || [ -z "$arch" ] || { [ "$os" = "windows" ] && [ "$arch" != "amd64" ]; }; then
+          echo "no release binary for ${RUNNER_OS:-?}/${RUNNER_ARCH:-?}; building from source"
+          exit 0
+        fi
+
+        asset="context-ci_${os}_${arch}${ext}"
+        base="${SERVER_URL:-https://github.com}/${ACTION_REPOSITORY:-evidary/context-ci}/releases/download/${tag}"
+        dir="${RUNNER_TEMP}/context-ci-bin"
+        mkdir -p "$dir"
+        if ! curl --fail --silent --show-error --location --retry 3 -o "${dir}/${asset}" "${base}/${asset}" ||
+           ! curl --fail --silent --show-error --location --retry 3 -o "${dir}/SHA256SUMS" "${base}/SHA256SUMS"; then
+          echo "could not download ${asset} for ${tag}; building from source"
+          rm -f "${dir}/${asset}" "${dir}/SHA256SUMS"
+          exit 0
+        fi
+
+        want="$(awk -v name="$asset" '{ sub(/^\*/, "", $2) } $2 == name { print $1 }' "${dir}/SHA256SUMS")"
+        if command -v sha256sum >/dev/null 2>&1; then
+          got="$(sha256sum "${dir}/${asset}" | awk '{ print $1 }')"
+        else
+          got="$(shasum -a 256 "${dir}/${asset}" | awk '{ print $1 }')"
+        fi
+        # A binary that does not match its published checksum is not a reason to fall back. It is
+        # a reason to stop.
+        if [ -z "$want" ] || [ "$want" != "$got" ]; then
+          echo "::error::${asset} for ${tag} does not match the release's SHA256SUMS (want ${want:-no entry}, got ${got})"
+          exit 1
+        fi
+
+        mv "${dir}/${asset}" "${dir}/context-ci${ext}"
+        rm -f "${dir}/SHA256SUMS"
+        chmod +x "${dir}/context-ci${ext}"
+        echo "$dir" >> "$GITHUB_PATH"
+        "${dir}/context-ci${ext}" version
+        echo "installed=true" >> "$GITHUB_OUTPUT"
+
     - name: Look for a Go toolchain
       id: toolchain
+      if: ${{ steps.download.outputs.installed != 'true' }}
       shell: bash
       run: |
         if command -v go >/dev/null 2>&1; then
@@ -72,33 +157,32 @@ runs:
           echo "found=false" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Install Go, because the runner has none
-      if: ${{ steps.toolchain.outputs.found != 'true' }}
+    - name: Install Go, because there is no release binary and the runner has no toolchain
+      if: ${{ steps.download.outputs.installed != 'true' && steps.toolchain.outputs.found != 'true' }}
       uses: actions/setup-go@v5
       with:
         go-version-file: ${{ github.action_path }}/go.mod
         cache: false
 
-    - name: Get context-ci
-      id: get
+    - name: Build context-ci
+      if: ${{ steps.download.outputs.installed != 'true' }}
       shell: bash
       env:
+        TAG: ${{ steps.download.outputs.tag }}
         INPUT_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
         if ! command -v go >/dev/null 2>&1; then
-          echo "::error::this action needs a Go toolchain to build context-ci and could not install one; add actions/setup-go before it"
+          echo "::error::context-ci could not be downloaded, and there is no Go toolchain to build it with; add actions/setup-go before this action"
           exit 1
         fi
         if [ -n "$INPUT_VERSION" ]; then
-          # A pinned version is a request for that release: the module proxy serves the tag, and
-          # the toolchain records the version in the binary, so `context-ci version` reports it.
-          go install "github.com/evidary/context-ci/cmd/context-ci@${INPUT_VERSION}"
+          # A version somebody named is a request for that release and no other, so it is never
+          # replaced by a build of whatever this ref happens to be.
+          go install "github.com/evidary/context-ci/cmd/context-ci@${TAG}"
           bin="$(go env GOBIN)"
           if [ -z "$bin" ]; then bin="$(go env GOPATH)/bin"; fi
         else
-          # No release asset is assumed to exist. Building this action's checkout needs no upload,
-          # no tag and no download, and the binary is the code this ref names.
           bin="${RUNNER_TEMP}/context-ci-bin"
           mkdir -p "$bin"
           ( cd "${GITHUB_ACTION_PATH}" && go build -trimpath -o "${bin}/context-ci$(go env GOEXE)" ./cmd/context-ci )
@@ -111,13 +195,18 @@ runs:
       shell: bash
       env:
         INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
         INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_ACKNOWLEDGE: ${{ inputs.acknowledge }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_TEXT: ${{ inputs.text }}
         INPUT_HEAD: ${{ inputs.head }}
         INPUT_BASELINE_RESULTS: ${{ inputs.baseline-results }}
         INPUT_RESULTS: ${{ inputs.results }}
         INPUT_ROOT: ${{ inputs.root }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_FORMAT: ${{ inputs.format }}
+        PULL_REQUEST_BASE: ${{ github.base_ref }}
       run: |
         set -euo pipefail
         shared=()
@@ -130,19 +219,29 @@ runs:
             echo "manifest=${out}" >> "$GITHUB_OUTPUT"
             ;;
           check)
-            if [ -z "$INPUT_BASELINE" ]; then
-              echo "::error::check needs a baseline manifest: pass the baseline input"
+            args=()
+            if [ -n "$INPUT_BASELINE" ] && [ -n "$INPUT_BASE_REF" ]; then
+              echo "::error::check takes base-ref or baseline, not both"
+              exit 1
+            elif [ -n "$INPUT_BASELINE" ]; then
+              args+=(--baseline "$INPUT_BASELINE")
+            elif [ -n "$INPUT_BASE_REF" ]; then
+              args+=(--base-ref "$INPUT_BASE_REF")
+            elif [ -n "$PULL_REQUEST_BASE" ]; then
+              args+=(--base-ref "origin/${PULL_REQUEST_BASE}")
+            else
+              # A gate that passes because it had nothing to compare is the worst default there is.
+              echo "::error::check needs something to compare with: this is not a pull request, so pass base-ref (for example origin/main) or baseline"
               exit 1
             fi
-            # With no head input the binary builds the head from the working tree, which is the
-            # point of the gate. This step used to write context-manifest.json only when it was
-            # missing and then compare against it, so a committed manifest named as the baseline
-            # was compared with itself and the job passed whatever the pull request changed.
-            head=()
-            if [ -n "$INPUT_HEAD" ]; then head=(--head "$INPUT_HEAD"); fi
+            if [ -n "$INPUT_HEAD" ]; then args+=(--head "$INPUT_HEAD"); fi
+            if [ -n "$INPUT_ACKNOWLEDGE" ]; then args+=(--acknowledge "$INPUT_ACKNOWLEDGE"); fi
+            if [ "$INPUT_TEXT" = "false" ]; then args+=(--no-text); fi
+            if [ "$INPUT_SUMMARY" != "false" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              args+=(--summary "$GITHUB_STEP_SUMMARY")
+            fi
             echo "manifest=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
-            context-ci check --baseline "$INPUT_BASELINE" ${head[@]+"${head[@]}"} \
-              --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
+            context-ci check "${args[@]}" --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
             ;;
           attribute)
             if [ -z "$INPUT_BASELINE" ] || [ -z "$INPUT_BASELINE_RESULTS" ] || [ -z "$INPUT_RESULTS" ]; then
@@ -156,7 +255,7 @@ runs:
               --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
             ;;
           *)
-            echo "::error::unknown command ${INPUT_COMMAND}; use manifest, check or attribute"
+            echo "::error::unknown command ${INPUT_COMMAND}; use check, manifest or attribute"
             exit 1
             ;;
         esac

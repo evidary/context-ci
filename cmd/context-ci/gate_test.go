@@ -123,14 +123,18 @@ func TestCheckRefusesACommitForAHeadItDidNotBuild(t *testing.T) {
 	}
 }
 
-// TestTheExampleProjectIsInStep keeps examples/minimal honest: the README points at it, so the
-// manifest committed there must be the one its files produce.
-func TestTheExampleProjectIsInStep(t *testing.T) {
+// TestTheExampleProjectBuilds keeps examples/minimal honest: the README points at it, so its
+// configuration has to be one this version accepts and its files have to be there.
+func TestTheExampleProjectBuilds(t *testing.T) {
 	example := filepath.Join("..", "..", "examples", "minimal")
-	code, out, errOut := check(t, "--root", example, "--baseline", filepath.Join(example, ManifestFileName), "--commit", "example")
-	if code != ExitOK || !strings.Contains(out, "no change in context") {
-		t.Fatalf("examples/minimal/%s is stale: exit = %d\n%s%s\nregenerate it with: context-ci manifest --root examples/minimal --commit example --out examples/minimal/%s",
-			ManifestFileName, code, out, errOut, ManifestFileName)
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"manifest", "--root", example, "--commit", "example"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("examples/minimal does not build: exit = %d\n%s", code, stderr.String())
+	}
+	for _, want := range []string{`"manifest_version": 2`, `"template_hash"`, `"id": "gpt-x"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("the example's manifest has no %s:\n%s", want, stdout.String())
+		}
 	}
 }
 
@@ -216,6 +220,14 @@ func TestAFirstRunSaysWhatToDoNext(t *testing.T) {
 	if code, _, stderr := initIn(t, "--root", root); code != ExitOK {
 		t.Fatalf("init exit = %d: %s", code, stderr)
 	}
+	// init found no prompt and left the line commented out. This is the user who uncomments it
+	// before creating the file.
+	configPath := filepath.Join(root, ".context-ci.yaml")
+	uncommented := strings.Replace(mustRead(t, configPath), "    # prompt: "+defaultPrompt, "    prompt: "+defaultPrompt, 1)
+	if !strings.Contains(uncommented, "\n    prompt: "+defaultPrompt) {
+		t.Fatalf("the starter file has no commented prompt line to uncomment:\n%s", uncommented)
+	}
+	write(t, root, ".context-ci.yaml", uncommented)
 	manifest := func() (int, string) {
 		var stdout, stderr bytes.Buffer
 		code := run([]string{"manifest", "--root", root}, &stdout, &stderr)
@@ -227,6 +239,7 @@ func TestAFirstRunSaysWhatToDoNext(t *testing.T) {
 			t.Fatalf("the failure is not a single message:\n%s", message)
 		}
 	}
+	_ = configPath
 
 	code, message := manifest()
 	if code != ExitManifest {

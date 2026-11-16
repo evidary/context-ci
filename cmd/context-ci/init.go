@@ -12,10 +12,9 @@ import (
 	"github.com/evidary/context-ci/internal/config"
 )
 
-// defaultPrompt is written when the checkout holds no file the probe list recognises. The
-// prompt source is required by the configuration validator, so init cannot leave it out the way
-// it leaves out a source it did not find; it names the documented path and says on stderr that
-// the path does not exist yet.
+// defaultPrompt is the path written, commented out, when the checkout holds no file the probe
+// list recognises. A prompt is optional, so init leaves it out the way it leaves out any source
+// it did not find, and a first `manifest` works instead of failing on a path nobody created.
 const defaultPrompt = "prompts/support.md"
 
 // optionalSource is a source init can name, with the documented path it writes as a comment when
@@ -32,7 +31,7 @@ var optionalSources = []optionalSource{
 	{
 		kind:    config.SourceTools,
 		example: "config/tools.yaml",
-		probes:  []string{"config/tools.yaml", "config/tools.yml", "tools.yaml", "tools.yml"},
+		probes:  []string{"config/tools.yaml", "config/tools.yml", "config/tools.json", "tools.yaml", "tools.yml", "tools.json"},
 	},
 	{
 		kind:    config.SourceRetrieval,
@@ -122,9 +121,9 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 	}
 
 	fmt.Fprintf(stdout, "wrote %s\n", path)
-	for _, rel := range missing {
-		fmt.Fprintf(stderr, "context-ci: %s does not exist yet, so 'context-ci manifest' will fail until it does: "+
-			"create it, or point capture.sources.prompt at the file that holds the prompt\n", rel)
+	if len(missing) > 0 {
+		fmt.Fprintf(stderr, "context-ci: no prompt file found at the usual paths, so capture.sources.prompt is commented out: "+
+			"point it at the file that holds the prompt, or list several under capture.files\n")
 	}
 	if absent := absentKinds(sources); len(absent) > 0 {
 		fmt.Fprintf(stderr, "context-ci: no %s source found in this checkout, so that line is commented out\n",
@@ -136,15 +135,13 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 
 // discoverSources names a source only when the checkout already has the file, because a
 // configuration pointing at a path nobody created fails the first manifest for a reason the team
-// then has to discover. The prompt is the exception: the configuration is invalid without it, so
-// a default path is written and reported as missing.
+// then has to discover. missing holds the prompt path that was looked for and not found.
 func discoverSources(root string) (map[string]string, []string) {
 	sources := make(map[string]string, 1+len(optionalSources))
 	var missing []string
 	if found := firstExisting(root, promptProbes); found != "" {
 		sources[config.SourcePrompt] = found
 	} else {
-		sources[config.SourcePrompt] = defaultPrompt
 		missing = append(missing, defaultPrompt)
 	}
 	for _, optional := range optionalSources {
@@ -186,12 +183,14 @@ func firstExisting(root string, candidates []string) string {
 func starterConfig(sources map[string]string, missing []string) []byte {
 	var b strings.Builder
 	b.WriteString(starterHead)
-	fmt.Fprintf(&b, "    prompt: %s\n", sources[config.SourcePrompt])
 	if len(missing) > 0 {
 		// The file says it about itself as well as init saying it on stderr: whoever opens the
 		// file tomorrow is the reader this sentence is for.
-		fmt.Fprintf(&b, "    # %s does not exist in this checkout yet: create it, or point this line at the\n"+
-			"    # file that holds the prompt. 'context-ci manifest' fails until one of those is done.\n", missing[0])
+		fmt.Fprintf(&b, "    # No prompt file was found at the usual paths. Uncomment this line and point it at the\n"+
+			"    # file that holds the prompt, or list several files under capture.files below.\n"+
+			"    # prompt: %s\n", missing[0])
+	} else {
+		fmt.Fprintf(&b, "    prompt: %s\n", sources[config.SourcePrompt])
 	}
 	b.WriteString(starterOptionalComment)
 	for _, optional := range optionalSources {
@@ -207,9 +206,9 @@ func starterConfig(sources map[string]string, missing []string) []byte {
 
 const starterHead = `# .context-ci.yaml - written by 'context-ci init'.
 #
-# 'context-ci manifest' hashes every file named under capture.sources and records the values
-# below beside the hashes, so this file is part of the context: commit it with the change that
-# edits it.
+# 'context-ci check --base-ref origin/main' compares everything this file names, as it is in the
+# working tree, with the same things as they were on the base branch. This file is part of the
+# context: commit it with the change that edits it.
 #
 # Every value below is a starting point, not a measurement. Edit model.provider and model.id
 # before the first real check, because a manifest naming a model the team does not call gates on
@@ -223,8 +222,8 @@ capture:
   # neither can be claimed by a configuration file.
   path: asserted
   sources:
-    # Required: a manifest with no prompt hash proves nothing.
-    # Every source path is relative to the repository root and may not leave it.
+    # The one file that holds the prompt. Every path is relative to the repository root and may
+    # not leave it.
 `
 
 const starterOptionalComment = `    # Optional. A line here must name a file that exists; leaving one out keeps that part of
@@ -232,6 +231,18 @@ const starterOptionalComment = `    # Optional. A line here must name a file tha
 `
 
 const starterTail = `
+  # Any other file that steers the model, in groups you name: prompt fragments, few-shot
+  # examples, a prompts directory. Each group is a diff class of its own, files.<group>, and
+  # every matched file is reported by path. * and ? match within one path segment and ** matches
+  # any number of directories.
+  # files:
+  #   prompts: ["prompts/**/*.md"]
+  #   examples: few_shot/*.jsonl
+
+  # Coding-agent files (AGENTS.md, CLAUDE.md, rules and skill directories, MCP and hook
+  # configuration) are found by name without being listed. Say false to leave them out.
+  # agent_files: true
+
 model:
   # openai | anthropic | google | other
   provider: openai

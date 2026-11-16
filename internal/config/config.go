@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -30,8 +32,7 @@ const DefaultFile = ".context-ci.yaml"
 //
 // The keys are the ones the product specification's example configuration uses.
 // SourceRetrieval is the retrieval configuration file, and its hash lands in
-// manifest.retrieval.filters_hash: that is the field the manifest schema publishes,
-// and the one whose change means the scope of what can be retrieved has moved.
+// manifest.retrieval.filters_hash.
 const (
 	SourcePrompt     = "prompt"
 	SourceRendered   = "rendered"
@@ -41,7 +42,8 @@ const (
 )
 
 // knownSources is the closed set of source keys. An unknown key is a typo, and a
-// typo in a source means a file that never gets hashed.
+// typo in a source means a file that never gets hashed. A file that fits none of
+// them belongs in capture.files, which takes any name.
 var knownSources = map[string]bool{
 	SourcePrompt: true, SourceRendered: true, SourceTools: true,
 	SourceRetrieval: true, SourceGuardrails: true,
@@ -60,8 +62,41 @@ type Config struct {
 
 // Capture selects how the manifest is produced and which files it covers.
 type Capture struct {
-	Path    string            `yaml:"path"`
+	Path string `yaml:"path"`
+	// Sources are the five files with a meaning of their own: each is one path.
 	Sources map[string]string `yaml:"sources"`
+	// Files are named groups of path patterns: prompt fragments, few-shot files, anything else
+	// that steers the model. Every matched file is hashed and compared by path, and each group
+	// is a diff class of its own, files.<group>.
+	Files map[string]Patterns `yaml:"files"`
+	// AgentFiles turns the built-in discovery of coding-agent files on or off. It is on unless
+	// this says false, because the files it finds steer an agent whether or not anyone listed
+	// them here.
+	AgentFiles *bool `yaml:"agent_files"`
+}
+
+// Patterns is one path pattern or a list of them.
+type Patterns []string
+
+// UnmarshalYAML accepts `group: path` as well as `group: [a, b]`, because the one-file case is
+// the common one and a list of one is noise.
+func (p *Patterns) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		*p = Patterns{node.Value}
+		return nil
+	case yaml.SequenceNode:
+		out := make(Patterns, 0, len(node.Content))
+		for _, item := range node.Content {
+			if item.Kind != yaml.ScalarNode {
+				return fmt.Errorf("line %d: a pattern is a string, got %s", item.Line, kindName(item.Kind))
+			}
+			out = append(out, item.Value)
+		}
+		*p = out
+		return nil
+	}
+	return fmt.Errorf("line %d: expected a pattern or a list of patterns, got %s", node.Line, kindName(node.Kind))
 }
 
 // Model is the model configuration under test.
@@ -129,6 +164,13 @@ func kindName(k yaml.Kind) string {
 	return "a non-scalar"
 }
 
+// Default is the configuration used when a repository has none: no declared model, no named
+// source, and the built-in discovery of coding-agent files. It is what lets `check --base-ref`
+// say something useful in a repository nobody has configured.
+func Default() *Config {
+	return &Config{Version: Version, Capture: Capture{Path: manifest.CaptureAsserted}}
+}
+
 // Load reads and validates a configuration file.
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
@@ -159,11 +201,30 @@ func Parse(raw []byte) (*Config, error) {
 	} else {
 		return nil, errors.New("config: the file holds more than one YAML document")
 	}
+	if cfg.Capture.Path == "" {
+		// asserted is the only path a configuration file can claim, so writing it is optional.
+		cfg.Capture.Path = manifest.CaptureAsserted
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
+
+// AgentFilesEnabled reports whether the built-in discovery of coding-agent files is on.
+func (c *Config) AgentFilesEnabled() bool {
+	return c.Capture.AgentFiles == nil || *c.Capture.AgentFiles
+}
+
+// HasModel reports whether the configuration declares a model at all.
+func (c *Config) HasModel() bool {
+	m := c.Model
+	return m.ID != "" || m.Provider != "" || m.AliasOf != "" || m.Params != (Params{})
+}
+
+// groupName is what a capture.files group may be called. A dot is excluded so that a group can
+// never be mistaken for one of the built-in classes, which all contain one.
+var groupName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // Validate rejects a configuration that could not produce a meaningful gate.
 func (c *Config) Validate() error {
@@ -177,15 +238,10 @@ func (c *Config) Validate() error {
 		return errors.New("config: capture.path instrumented needs a running application and an SDK; use asserted for the CLI")
 	case manifest.CaptureObserved:
 		return errors.New("config: capture.path observed needs a recorded sample; use asserted for the CLI")
-	case "":
-		return errors.New("config: capture.path is required")
 	default:
 		return fmt.Errorf("config: capture.path %q is not one of asserted, instrumented, observed", c.Capture.Path)
 	}
 
-	if len(c.Capture.Sources) == 0 {
-		return errors.New("config: capture.sources is empty, so the manifest would cover nothing")
-	}
 	keys := make([]string, 0, len(c.Capture.Sources))
 	for k := range c.Capture.Sources {
 		keys = append(keys, k)
@@ -198,27 +254,58 @@ func (c *Config) Validate() error {
 				known = append(known, name)
 			}
 			sort.Strings(known)
-			return fmt.Errorf("config: capture.sources.%s is not a known source (%s)", k, strings.Join(known, ", "))
+			return fmt.Errorf("config: capture.sources.%s is not a known source (%s); "+
+				"a file of any other kind goes under capture.files, in a group you name",
+				k, strings.Join(known, ", "))
 		}
 		if c.Capture.Sources[k] == "" {
 			return fmt.Errorf("config: capture.sources.%s is empty", k)
 		}
 	}
-	if _, ok := c.Capture.Sources[SourcePrompt]; !ok {
-		return errors.New("config: capture.sources.prompt is required: a manifest with no prompt hash proves nothing")
+	if _, ok := c.Capture.Sources[SourceRendered]; ok {
+		if _, ok := c.Capture.Sources[SourcePrompt]; !ok {
+			return errors.New("config: capture.sources.rendered is the rendered form of capture.sources.prompt, which is not set")
+		}
 	}
 
-	if c.Model.ID == "" {
-		return errors.New("config: model.id is required")
+	groups := make([]string, 0, len(c.Capture.Files))
+	for g := range c.Capture.Files {
+		groups = append(groups, g)
 	}
-	// These three are refused here, with the configuration key in the message, rather than left
-	// for the manifest validator to refuse later: the manifest rejects them too, and a team should
-	// hear about its own file from the command that read it.
-	if !manifest.IsProvider(c.Model.Provider) {
-		if c.Model.Provider == "" {
-			return fmt.Errorf("config: model.provider is required: one of %s", strings.Join(manifest.Providers, ", "))
+	sort.Strings(groups)
+	for _, g := range groups {
+		if !groupName.MatchString(g) {
+			return fmt.Errorf("config: capture.files.%s is not a usable group name: "+
+				"use lower-case letters, digits, '-' and '_', starting with a letter", g)
 		}
-		return fmt.Errorf("config: model.provider %q is not one of %s", c.Model.Provider, strings.Join(manifest.Providers, ", "))
+		if len(c.Capture.Files[g]) == 0 {
+			return fmt.Errorf("config: capture.files.%s lists no pattern", g)
+		}
+		for _, pattern := range c.Capture.Files[g] {
+			if err := ValidatePattern(pattern); err != nil {
+				return fmt.Errorf("config: capture.files.%s: %w", g, err)
+			}
+		}
+	}
+
+	if len(c.Capture.Sources) == 0 && len(c.Capture.Files) == 0 && !c.AgentFilesEnabled() {
+		return errors.New("config: capture.sources and capture.files are empty and capture.agent_files is false, " +
+			"so the manifest would cover nothing")
+	}
+
+	// A model is optional, because a repository may gate files and call no model of its own. A
+	// half-declared one is refused here, with the configuration key in the message, rather than
+	// left for the manifest validator to refuse later.
+	if c.HasModel() {
+		if c.Model.ID == "" {
+			return errors.New("config: model.id is required when a model is declared")
+		}
+		if !manifest.IsProvider(c.Model.Provider) {
+			if c.Model.Provider == "" {
+				return fmt.Errorf("config: model.provider is required: one of %s", strings.Join(manifest.Providers, ", "))
+			}
+			return fmt.Errorf("config: model.provider %q is not one of %s", c.Model.Provider, strings.Join(manifest.Providers, ", "))
+		}
 	}
 	if c.Model.Params.MaxTokens != nil && *c.Model.Params.MaxTokens < 0 {
 		return errors.New("config: model.params.max_tokens cannot be negative")
@@ -230,6 +317,11 @@ func (c *Config) Validate() error {
 	for name, sev := range c.Severity {
 		if !diff.IsKnownClass(name) {
 			return fmt.Errorf("config: severity.%s is not a diff class; run 'context-ci classes' for the list", name)
+		}
+		if group, ok := strings.CutPrefix(name, diff.FilesClassPrefix); ok {
+			if _, configured := c.Capture.Files[group]; !configured {
+				return fmt.Errorf("config: severity.%s names a group capture.files does not define", name)
+			}
 		}
 		switch diff.Severity(sev) {
 		case diff.SeverityFail, diff.SeverityWarn, diff.SeverityIgnore:
@@ -248,6 +340,36 @@ func (c *Config) Validate() error {
 	}
 	if c.Gate.InputUSDPerMTok < 0 {
 		return errors.New("config: gate.input_usd_per_mtok cannot be negative")
+	}
+	return nil
+}
+
+// ValidatePattern rejects a pattern that could never match or that points outside the root. A
+// pattern is a slash-separated path in which `*` and `?` match within one segment, `[...]` is a
+// character class, and a segment that is exactly `**` matches any number of directories.
+func ValidatePattern(pattern string) error {
+	switch {
+	case pattern == "":
+		return errors.New("a pattern is empty")
+	case strings.Contains(pattern, `\`):
+		return fmt.Errorf("pattern %q uses a backslash; write paths with forward slashes on every platform", pattern)
+	case strings.HasPrefix(pattern, "/") || (len(pattern) > 1 && pattern[1] == ':'):
+		return fmt.Errorf("pattern %q is absolute; a pattern is relative to the repository root", pattern)
+	}
+	for _, segment := range strings.Split(strings.TrimSuffix(pattern, "/"), "/") {
+		switch {
+		case segment == "..":
+			return fmt.Errorf("pattern %q leaves the repository root", pattern)
+		case segment == "":
+			return fmt.Errorf("pattern %q has an empty path segment", pattern)
+		case segment == "**":
+			continue
+		case strings.Contains(segment, "**"):
+			return fmt.Errorf("pattern %q: ** must be a whole path segment, as in prompts/**/*.md", pattern)
+		}
+		if _, err := path.Match(segment, ""); err != nil {
+			return fmt.Errorf("pattern %q is malformed: %v", pattern, err)
+		}
 	}
 	return nil
 }

@@ -2,7 +2,7 @@
 
 **This file routes every question to exactly one document in this repository.** Context CI is a standalone product; nothing needed to build, sell or support it lives outside this repository except the vendored contracts, which are copied in.
 
-**Repo:** `context-ci` · **Version:** 0.8.0 (pre-release; the CLI is implemented, and the repository is private until the launch planned for 16 Dec 2026) · **Last updated:** 16 November 2026
+**Repo:** `context-ci` · **Version:** 0.9.0 (pre-release; the CLI is implemented, and the repository is private until the launch planned for 16 Dec 2026) · **Last updated:** 16 November 2026
 
 ---
 
@@ -14,7 +14,7 @@
 | What exactly we build, in scope and out | [03-product/spec.md](03-product/spec.md) |
 | The manifest format | [03-product/spec.md](03-product/spec.md) §4 |
 | Every flag, exit code and configuration key | [03-product/cli-reference.md](03-product/cli-reference.md) |
-| A working project to copy | [../examples/minimal](../examples/minimal/.context-ci.yaml) — one prompt, one configuration, the manifest they produce |
+| A working project to copy | [../examples/minimal](../examples/minimal/.context-ci.yaml) — one prompt and one configuration |
 | Which platform contracts we consume and at what version | [05-contracts/README.md](05-contracts/README.md) |
 | Why this is a separate repository | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) |
 | Which language the CLI is written in, and why the SDKs are not | [07-decisions/adr-0002-implementation-language.md](07-decisions/adr-0002-implementation-language.md) |

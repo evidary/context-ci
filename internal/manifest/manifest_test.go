@@ -13,7 +13,7 @@ func sample() *Manifest {
 	filters := strings.Repeat("f", 64)
 	guard := strings.Repeat("9", 64)
 	return &Manifest{
-		ManifestVersion: 1,
+		ManifestVersion: 2,
 		CreatedAt:       "2026-12-01T10:00:00Z",
 		Commit:          "9c1f2ab",
 		Capture:         Capture{Path: CaptureAsserted},
@@ -34,6 +34,10 @@ func sample() *Manifest {
 		Tools: []Tool{
 			{Name: "refund.create", SchemaHash: strings.Repeat("c", 64), DescriptionHash: ptr(strings.Repeat("e", 64)), DescriptionTokens: 120},
 			{Name: "ticket.read", SchemaHash: strings.Repeat("d", 64), DescriptionHash: ptr(strings.Repeat("f", 64)), DescriptionTokens: 40},
+		},
+		Files: []File{
+			{Group: "agent.instructions", Path: "AGENTS.md", Hash: strings.Repeat("1", 64)},
+			{Group: "prompts", Path: "prompts/tone.md", Hash: strings.Repeat("2", 64), HiddenCharacters: 3},
 		},
 		Retrieval: Retrieval{
 			IndexID:               "kb-prod",
@@ -63,7 +67,7 @@ func TestDigestIsStable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute() error = %v", err)
 	}
-	const want = "e342a0e16c0586531d21b7759cdeb1f1d67102b7cd9eade78a8965fa1c8bccf0"
+	const want = "41e9c2f3626047504fbbfc2c36b429203befebe4f770d1446f5c030e8caeb5b1"
 	if got != want {
 		t.Fatalf("digest = %s\npinned  %s\nif this is intentional then every stored "+
 			"manifest stops matching and the SDKs need the same change", got, want)
@@ -124,7 +128,6 @@ func TestDigestNoticesEveryField(t *testing.T) {
 	}
 
 	cases := map[string]func(*Manifest){
-		"commit":                   func(m *Manifest) { m.Commit = "abcdef0" },
 		"model.provider":           func(m *Manifest) { m.Model.Provider = "anthropic" },
 		"model.id":                 func(m *Manifest) { m.Model.ID = "gpt-y" },
 		"model.alias_of":           func(m *Manifest) { m.Model.AliasOf = ptr("elsewhere") },
@@ -138,6 +141,17 @@ func TestDigestNoticesEveryField(t *testing.T) {
 			m.Tools = append(m.Tools, Tool{Name: "x", SchemaHash: strings.Repeat("7", 64), DescriptionHash: ptr(strings.Repeat("7", 64))})
 		},
 		"tools.removed":            func(m *Manifest) { m.Tools = m.Tools[:1] },
+		"tools.hidden_characters":  func(m *Manifest) { m.Tools[0].HiddenCharacters = 1 },
+		"prompt.hidden_characters": func(m *Manifest) { m.Prompt.HiddenCharacters = 1 },
+		"files.added": func(m *Manifest) {
+			m.Files = append(m.Files, File{Group: "prompts", Path: "prompts/new.md", Hash: strings.Repeat("3", 64)})
+		},
+		"files.removed":            func(m *Manifest) { m.Files = m.Files[:1] },
+		"files.hash":               func(m *Manifest) { m.Files[0].Hash = strings.Repeat("4", 64) },
+		"files.group":              func(m *Manifest) { m.Files[0].Group = "agent.config" },
+		"files.hidden_characters":  func(m *Manifest) { m.Files[0].HiddenCharacters = 2 },
+		"model.absent":             func(m *Manifest) { m.Model = Model{} },
+		"prompt.absent":            func(m *Manifest) { m.Prompt = Prompt{} },
 		"tools.schema_hash":        func(m *Manifest) { m.Tools[0].SchemaHash = strings.Repeat("8", 64) },
 		"tools.description_hash":   func(m *Manifest) { m.Tools[0].DescriptionHash = ptr(strings.Repeat("8", 64)) },
 		"tools.description_tokens": func(m *Manifest) { m.Tools[0].DescriptionTokens = 121 },
@@ -163,6 +177,46 @@ func TestDigestNoticesEveryField(t *testing.T) {
 				t.Fatalf("%s does not change the digest, so the gate cannot see it change", name)
 			}
 		})
+	}
+}
+
+// TestDigestIgnoresCommit is what makes the digest an identity for a configuration: the same
+// files and the same declared values are the same context at any commit. While the commit was
+// digested, an unchanged checkout had a different digest after every commit, and a digest could
+// not be used to say "this is the configuration that was reviewed".
+func TestDigestIgnoresCommit(t *testing.T) {
+	first, second := sample(), sample()
+	second.Commit = "abcdef0"
+	d1, err := first.Compute()
+	if err != nil {
+		t.Fatalf("Compute() error = %v", err)
+	}
+	d2, err := second.Compute()
+	if err != nil {
+		t.Fatalf("Compute() error = %v", err)
+	}
+	if d1 != d2 {
+		t.Fatalf("commit changed the digest: %s then %s", d1, d2)
+	}
+}
+
+// TestModelAndPromptAreOptional covers a repository that gates files and declares no model: the
+// manifest is valid, and the two fields are absent from the document rather than present and
+// empty, so a reader cannot take a placeholder for a declaration.
+func TestModelAndPromptAreOptional(t *testing.T) {
+	m := sample()
+	m.Model, m.Prompt = Model{}, Prompt{}
+	if _, err := m.Compute(); err != nil {
+		t.Fatalf("Compute() error = %v", err)
+	}
+	encoded, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"model"`, `"prompt"`} {
+		if strings.Contains(string(encoded), field) {
+			t.Fatalf("an absent %s is still written: %s", field, encoded)
+		}
 	}
 }
 
@@ -224,7 +278,13 @@ func TestKeysSortByUTF16CodeUnit(t *testing.T) {
 
 func TestValidateRejectsIncompleteManifests(t *testing.T) {
 	cases := map[string]func(*Manifest){
-		"version":        func(m *Manifest) { m.ManifestVersion = 2 },
+		"version":        func(m *Manifest) { m.ManifestVersion = 3 },
+		"old version":    func(m *Manifest) { m.ManifestVersion = 1 },
+		"model provider": func(m *Manifest) { m.Model.Provider = "" },
+		"duplicate file": func(m *Manifest) { m.Files = append(m.Files, m.Files[0]) },
+		"file hash":      func(m *Manifest) { m.Files[0].Hash = "short" },
+		"file path":      func(m *Manifest) { m.Files[0].Path = "" },
+		"prompt details": func(m *Manifest) { m.Prompt = Prompt{Variables: map[string]string{"a": "string"}} },
 		"commit":         func(m *Manifest) { m.Commit = "" },
 		"capture path":   func(m *Manifest) { m.Capture.Path = "guessed" },
 		"model id":       func(m *Manifest) { m.Model.ID = "" },

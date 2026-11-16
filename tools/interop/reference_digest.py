@@ -6,7 +6,7 @@ claim two implementations agree on, not a number the implementation produced and
 then remembered.
 
 The digest is sha256 over the RFC 8785 canonical form of the manifest with
-`created_at`, `digest` and `content` removed.
+`created_at`, `commit`, `digest` and `content` removed.
 
 Usage:
     python tools/interop/reference_digest.py            # check the fixture digest
@@ -20,8 +20,7 @@ import sys
 # The manifest produced by sample() in internal/manifest/manifest_test.go, with the
 # excluded fields already absent.
 SAMPLE = {
-    "manifest_version": 1,
-    "commit": "9c1f2ab",
+    "manifest_version": 2,
     "capture": {"path": "asserted"},
     "model": {
         "provider": "openai",
@@ -49,6 +48,15 @@ SAMPLE = {
             "description_tokens": 40,
         },
     ],
+    "files": [
+        {"group": "agent.instructions", "path": "AGENTS.md", "hash": "1" * 64},
+        {
+            "group": "prompts",
+            "path": "prompts/tone.md",
+            "hash": "2" * 64,
+            "hidden_characters": 3,
+        },
+    ],
     "retrieval": {
         "index_id": "kb-prod",
         "embedding_model": "embed-3",
@@ -60,9 +68,9 @@ SAMPLE = {
     "policy": {"version": "2026.11", "guardrails_hash": "9" * 64},
 }
 
-EXPECTED = "e342a0e16c0586531d21b7759cdeb1f1d67102b7cd9eade78a8965fa1c8bccf0"
+EXPECTED = "41e9c2f3626047504fbbfc2c36b429203befebe4f770d1446f5c030e8caeb5b1"
 
-EXCLUDED = ("created_at", "digest", "content")
+EXCLUDED = ("created_at", "commit", "digest", "content")
 
 
 def _utf16_key(s):

@@ -20,7 +20,7 @@ model:
 
 gate:
   # A prompt edit is a `warn` by default, and the default gate fails only on `fail`. This example
-  # fails on a warning as well, so that editing prompts/support.md without regenerating
-  # context-manifest.json turns the check red. Use `fail` to let prompt edits through with a
-  # warning and block only changes such as a different model.
+  # fails on a warning as well, so that editing prompts/support.md turns
+  # `context-ci check --base-ref HEAD` red. Use `fail` to let prompt edits through with a warning
+  # and block only changes such as a different model.
   fail_on: warn

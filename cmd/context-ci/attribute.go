@@ -14,6 +14,11 @@ import (
 // attributeCommand implements the attribute verb: given two manifests and two eval runs, list the
 // context changes the movement is consistent with, and say plainly when it cannot. It names
 // candidates; it does not establish a cause.
+//
+// The verb is experimental. It is a count: for each regressed case, the classes that case's author
+// wrote under depends_on and that also changed. It needs results in this tool's own format and
+// labels nobody's eval framework writes, so it is useful to a team that adds both and to nobody
+// else yet.
 func attributeCommand(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("attribute", flag.ContinueOnError)
 	var (
@@ -46,7 +51,15 @@ func attributeCommand(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	cfg, err := loadConfig(*configPath, *root)
+	// The same refusal check makes: one file as both sides can only ever report that nothing
+	// changed, and here that would read as "the regression has no candidate cause".
+	if sameFile(*baseline, *head) {
+		fmt.Fprintf(stderr, "attribute: --baseline and --head are the same file (%s), so no class could have changed between them; "+
+			"name the manifest each eval run was made against\n", *baseline)
+		return ExitUsage
+	}
+
+	cfg, _, err := loadConfigOrDefault(*configPath, *root, io.Discard)
 	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return ExitUsage
@@ -77,9 +90,18 @@ func attributeCommand(args []string, stdout, stderr io.Writer) int {
 		CallsPerDay:     cfg.Gate.CallsPerDay,
 		InputUSDPerMTok: cfg.Gate.InputUSDPerMTok,
 	})
+	// One change per class, however many entries the class has: three edited tools are one changed
+	// class, and counting them as three overstated how many things had moved together.
 	changes := make([]attribute.ClassChange, 0, len(compared.Entries))
+	position := map[string]int{}
 	for _, entry := range compared.Entries {
-		changes = append(changes, attribute.ClassChange{Class: string(entry.Class), Summary: entry.Summary})
+		class := string(entry.Class)
+		if i, seen := position[class]; seen {
+			changes[i].Summary += "; " + entry.Summary
+			continue
+		}
+		position[class] = len(changes)
+		changes = append(changes, attribute.ClassChange{Class: class, Summary: entry.Summary})
 	}
 	report := attribute.Attribute(baseResults, headResults, changes)
 

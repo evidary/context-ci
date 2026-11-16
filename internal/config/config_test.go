@@ -103,15 +103,52 @@ version: 1
 capture: {path: instrumented, sources: {prompt: p.md}}
 model: {provider: openai, id: m}
 `,
-		"no sources": `
+		"nothing to cover": `
 version: 1
-capture: {path: asserted, sources: {}}
+capture: {path: asserted, sources: {}, agent_files: false}
 model: {provider: openai, id: m}
 `,
-		"no prompt source": `
+		"a rendered sample with no prompt": `
 version: 1
-capture: {path: asserted, sources: {tools: t.yaml}}
-model: {provider: openai, id: m}
+capture: {path: asserted, sources: {rendered: build/r.txt}}
+`,
+		"a group name with a dot": `
+version: 1
+capture: {files: {agent.rules: "rules/**"}}
+`,
+		"a group with no pattern": `
+version: 1
+capture: {files: {prompts: []}}
+`,
+		"a pattern that leaves the root": `
+version: 1
+capture: {files: {prompts: "../other/*.md"}}
+`,
+		"an absolute pattern": `
+version: 1
+capture: {files: {prompts: "/etc/*.md"}}
+`,
+		"a pattern with a backslash": `
+version: 1
+capture: {files: {prompts: "prompts\\*.md"}}
+`,
+		"** inside a segment": `
+version: 1
+capture: {files: {prompts: "prompts/**.md"}}
+`,
+		"a malformed character class": `
+version: 1
+capture: {files: {prompts: "prompts/[a.md"}}
+`,
+		"a severity for a group that is not defined": `
+version: 1
+capture: {files: {prompts: "prompts/*.md"}}
+severity: {files.examples: fail}
+`,
+		"parameters for a model nobody named": `
+version: 1
+capture: {sources: {prompt: p.md}}
+model: {params: {temperature: "0"}}
 `,
 		"unknown source key": `
 version: 1

@@ -31,7 +31,7 @@ Vendored copies with digests: [vendor/acp-core@1.0.2/VENDORED.md](vendor/acp-cor
 
 | Artefact | Format | Stability |
 |---|---|---|
-| `context-manifest.json` | JSON, `manifest_version: 1` | Versioned by `manifest_version`; the stability promise is open decision D-01. A reader rejects a field it does not know, because an unknown field is outside the digest — so adding a field is not transparent to an older binary |
+| `context-manifest.json` | JSON, `manifest_version: 2` (version 1, written by 0.8 or earlier, is rejected) | Versioned by `manifest_version`; the stability promise is open decision D-01. A reader rejects a field it does not know, because an unknown field is outside the digest — so adding a field is not transparent to an older binary |
 | Manifest JSON Schema | JSON Schema 2020-12 | **Not yet published.** No schema file ships today; [spec.md](../03-product/spec.md) §4 and the reader in `internal/manifest` are the definition until open decision D-01 is settled |
 | Diff result | JSON + SARIF + JUnit | Stable within a major CLI version |
 | Regression attribution event | JSON, referenced by hash in a platform `action-record` payload | **Not implemented.** `attribute` writes a report; nothing emits an event |

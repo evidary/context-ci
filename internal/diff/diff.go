@@ -16,6 +16,7 @@ package diff
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -56,6 +57,35 @@ const (
 	ClassToolDescription Class = "tools.description"
 )
 
+// Classes for files matched by name instead of declared one by one.
+const (
+	// ClassAgentInstructions is a file a coding agent reads as instructions: AGENTS.md, CLAUDE.md,
+	// a rules directory, a skill.
+	ClassAgentInstructions Class = "agent.instructions"
+	// ClassAgentConfig is a file that decides what a coding agent may run or reach: an MCP server
+	// list, hooks, permissions.
+	ClassAgentConfig Class = "agent.config"
+	// ClassHiddenCharacters is text a model reads and a reviewer cannot see, in a file, a prompt
+	// or a tool description that is new or changed.
+	ClassHiddenCharacters Class = "hidden_characters"
+)
+
+// FilesClassPrefix starts the class of every group a configuration defines under capture.files:
+// the group `examples` is the class `files.examples`. The set is open, because the groups are
+// the team's own.
+const FilesClassPrefix = "files."
+
+var filesGroup = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+
+// FileClass returns the class of a file group as a manifest records it.
+func FileClass(group string) Class {
+	switch group {
+	case string(ClassAgentInstructions), string(ClassAgentConfig):
+		return Class(group)
+	}
+	return Class(FilesClassPrefix + group)
+}
+
 // Severity is how a change is treated by the gate.
 type Severity string
 
@@ -91,6 +121,13 @@ func DefaultSeverity(c Class) Severity {
 		// A tool description is prompt-injection surface that the model reads as
 		// instructions. Same severity as the schema it sits beside.
 		return SeverityFail
+	case ClassAgentConfig:
+		// A new MCP server or hook gives an agent something to run. An edited instruction
+		// file is the commonest deliberate change there is, so it warns, as a prompt does.
+		return SeverityFail
+	case ClassHiddenCharacters:
+		// Nobody reviews what they cannot see.
+		return SeverityFail
 	}
 	return SeverityWarn
 }
@@ -107,19 +144,23 @@ func Classes() []Class {
 		ClassModelProvider, ClassPromptTemplateHash, ClassPromptVariables,
 		ClassRetrievalIndexID, ClassRetrievalChunker, ClassPolicyGuardrailsHash,
 		ClassCapturePath, ClassToolDescription,
+		ClassAgentInstructions, ClassAgentConfig, ClassHiddenCharacters,
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i] < all[j] })
 	return all
 }
 
-// IsKnownClass reports whether a configuration key names a real class.
+// IsKnownClass reports whether a configuration key names a real class: one of Classes, or the
+// class of a file group. Whether that group is configured is for the caller that has the
+// configuration to say.
 func IsKnownClass(name string) bool {
 	for _, c := range Classes() {
 		if string(c) == name {
 			return true
 		}
 	}
-	return false
+	group, ok := strings.CutPrefix(name, FilesClassPrefix)
+	return ok && filesGroup.MatchString(group)
 }
 
 // Entry is one change.
@@ -130,6 +171,27 @@ type Entry struct {
 	Before   string   `json:"before,omitempty"`
 	After    string   `json:"after,omitempty"`
 	Detail   string   `json:"detail,omitempty"`
+	// Path and Line say where the change is, when a file holds it. Compare fills Path for a
+	// file group; the caller that knows the configuration fills the rest.
+	Path string `json:"path,omitempty"`
+	Line int    `json:"line,omitempty"`
+	// Acknowledged marks a change somebody with the authority to do so has accepted for this
+	// comparison. It is still reported, at its own severity; it no longer fails the gate.
+	Acknowledged bool `json:"acknowledged,omitempty"`
+	// Source and Subject tell the caller which configured source an entry came from ("prompt" or
+	// "tools") and which tool it names, so it can find the file and the line. They are not part
+	// of a report.
+	Source  string `json:"-"`
+	Subject string `json:"-"`
+}
+
+// TextDiff is the changed text of one file, for a reviewer who would otherwise see two hashes.
+type TextDiff struct {
+	Path string `json:"path"`
+	// Diff is unified-diff hunks, without the file header.
+	Diff string `json:"diff"`
+	// Omitted is how many further lines of it were left out to keep a report readable.
+	Omitted int `json:"omitted,omitempty"`
 }
 
 // Options controls how a comparison is performed.
@@ -141,6 +203,30 @@ type Options struct {
 	// figure invented from a guessed price is worse than no figure.
 	CallsPerDay     int
 	InputUSDPerMTok float64
+	// Acknowledge lists the classes whose changes are accepted for this comparison, and
+	// AcknowledgeAll accepts every class except hidden characters, which have to be named: a
+	// blanket approval of text nobody could read approves nothing.
+	Acknowledge    map[string]bool
+	AcknowledgeAll bool
+}
+
+func (o Options) acknowledged(c Class) bool {
+	if o.Acknowledge[string(c)] {
+		return true
+	}
+	return o.AcknowledgeAll && c != ClassHiddenCharacters
+}
+
+func (o Options) entry(c Class, summary, before, after, detail string) Entry {
+	return Entry{
+		Class:        c,
+		Severity:     o.severityFor(c),
+		Summary:      summary,
+		Before:       before,
+		After:        after,
+		Detail:       detail,
+		Acknowledged: o.acknowledged(c),
+	}
 }
 
 func (o Options) severityFor(c Class) Severity {
@@ -156,6 +242,9 @@ type Result struct {
 	HeadDigest string  `json:"head_digest"`
 	Entries    []Entry `json:"entries"`
 	Unchanged  []Class `json:"unchanged"`
+	// Texts holds the changed text of the files behind the entries, when the caller could read
+	// both sides of them.
+	Texts []TextDiff `json:"text_diffs,omitempty"`
 }
 
 // Equal reports whether two manifests describe the same context. The digest is the
@@ -168,6 +257,18 @@ func (r *Result) Worst() Severity {
 	worst := SeverityIgnore
 	for _, e := range r.Entries {
 		if rank(e.Severity) > rank(worst) {
+			worst = e.Severity
+		}
+	}
+	return worst
+}
+
+// Gating returns the most severe severity among the changes nobody acknowledged, which is what
+// the gate decides on.
+func (r *Result) Gating() Severity {
+	worst := SeverityIgnore
+	for _, e := range r.Entries {
+		if !e.Acknowledged && rank(e.Severity) > rank(worst) {
 			worst = e.Severity
 		}
 	}
@@ -196,21 +297,14 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 		Unchanged:  []Class{},
 	}
 	add := func(class Class, summary, before, after, detail string) {
-		res.Entries = append(res.Entries, Entry{
-			Class:    class,
-			Severity: opts.severityFor(class),
-			Summary:  summary,
-			Before:   before,
-			After:    after,
-			Detail:   detail,
-		})
+		res.Entries = append(res.Entries, opts.entry(class, summary, before, after, detail))
 	}
 	unchanged := func(class Class) { res.Unchanged = append(res.Unchanged, class) }
 
 	if base.Model.ID == head.Model.ID {
 		unchanged(ClassModelID)
 	} else {
-		add(ClassModelID, "the model changed", base.Model.ID, head.Model.ID, "")
+		add(ClassModelID, "the model changed", orDash(base.Model.ID), orDash(head.Model.ID), "")
 	}
 
 	if deref(base.Model.AliasOf) == deref(head.Model.AliasOf) {
@@ -223,7 +317,7 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 	if base.Model.Provider == head.Model.Provider {
 		unchanged(ClassModelProvider)
 	} else {
-		add(ClassModelProvider, "the model provider changed", base.Model.Provider, head.Model.Provider, "")
+		add(ClassModelProvider, "the model provider changed", orDash(base.Model.Provider), orDash(head.Model.Provider), "")
 	}
 
 	if before, after := paramsFingerprint(base.Model.Params), paramsFingerprint(head.Model.Params); before == after {
@@ -236,7 +330,12 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 		unchanged(ClassPromptTemplateHash)
 	} else {
 		add(ClassPromptTemplateHash, "the prompt template changed",
-			short(base.Prompt.TemplateHash), short(head.Prompt.TemplateHash), contentHint(base, head, "template"))
+			orDash(short(base.Prompt.TemplateHash)), orDash(short(head.Prompt.TemplateHash)), "")
+		if head.Prompt.HiddenCharacters > 0 {
+			add(ClassHiddenCharacters, fmt.Sprintf("the prompt template contains %s", hiddenCount(head.Prompt.HiddenCharacters)),
+				"", "", hiddenDetail)
+			res.Entries[len(res.Entries)-1].Source = "prompt"
+		}
 	}
 
 	// When no rendered sample was supplied, capture sets rendered_hash equal to
@@ -249,7 +348,7 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 		unchanged(ClassPromptRenderedHash)
 	} else {
 		add(ClassPromptRenderedHash, "the rendered prompt changed",
-			short(base.Prompt.RenderedHash), short(head.Prompt.RenderedHash), contentHint(base, head, "rendered"))
+			orDash(short(base.Prompt.RenderedHash)), orDash(short(head.Prompt.RenderedHash)), "")
 	}
 
 	if before, after := variablesFingerprint(base.Prompt.Variables), variablesFingerprint(head.Prompt.Variables); before == after {
@@ -259,6 +358,7 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 	}
 
 	compareTools(base, head, opts, res)
+	compareFiles(base, head, opts, res)
 
 	if base.Retrieval.EmbeddingModel == head.Retrieval.EmbeddingModel &&
 		base.Retrieval.EmbeddingModelVersion == head.Retrieval.EmbeddingModelVersion {
@@ -280,8 +380,9 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 	if deref(base.Retrieval.FiltersHash) == deref(head.Retrieval.FiltersHash) {
 		unchanged(ClassRetrievalFiltersHash)
 	} else {
-		add(ClassRetrievalFiltersHash, "the retrieval filter changed, so the scope of what can be retrieved changed",
-			orDash(short(deref(base.Retrieval.FiltersHash))), orDash(short(deref(head.Retrieval.FiltersHash))), "")
+		add(ClassRetrievalFiltersHash, "the retrieval configuration file changed",
+			orDash(short(deref(base.Retrieval.FiltersHash))), orDash(short(deref(head.Retrieval.FiltersHash))),
+			"its values differ; comments, key order and formatting are not compared")
 	}
 
 	if base.Retrieval.IndexID == head.Retrieval.IndexID {
@@ -307,8 +408,9 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 	if deref(base.Policy.GuardrailsHash) == deref(head.Policy.GuardrailsHash) {
 		unchanged(ClassPolicyGuardrailsHash)
 	} else {
-		add(ClassPolicyGuardrailsHash, "the guardrails configuration changed",
-			orDash(short(deref(base.Policy.GuardrailsHash))), orDash(short(deref(head.Policy.GuardrailsHash))), "")
+		add(ClassPolicyGuardrailsHash, "the guardrails configuration file changed",
+			orDash(short(deref(base.Policy.GuardrailsHash))), orDash(short(deref(head.Policy.GuardrailsHash))),
+			"its values differ; comments, key order and formatting are not compared")
 	}
 
 	if base.Capture.Path == head.Capture.Path {
@@ -321,6 +423,95 @@ func Compare(base, head *manifest.Manifest, opts Options) *Result {
 	sort.SliceStable(res.Entries, func(i, j int) bool { return res.Entries[i].Class < res.Entries[j].Class })
 	sort.Slice(res.Unchanged, func(i, j int) bool { return res.Unchanged[i] < res.Unchanged[j] })
 	return res
+}
+
+const hiddenDetail = "a reviewer cannot see these characters and a model reads them; remove them, or acknowledge this class by name"
+
+func hiddenCount(n int) string {
+	if n == 1 {
+		return "1 hidden character"
+	}
+	return fmt.Sprintf("%d hidden characters", n)
+}
+
+// compareFiles reports each file of each group by path. A group is a class, so one severity
+// covers every file in it; the entries are per file, because "something under prompts/ changed"
+// is not what a reviewer needs to hear.
+func compareFiles(base, head *manifest.Manifest, opts Options, res *Result) {
+	type key struct{ group, path string }
+	before := make(map[key]manifest.File, len(base.Files))
+	after := make(map[key]manifest.File, len(head.Files))
+	groups := map[string]bool{string(ClassAgentInstructions): true, string(ClassAgentConfig): true}
+	var keys []key
+	for _, f := range base.Files {
+		k := key{f.Group, f.Path}
+		before[k] = f
+		groups[f.Group] = true
+		keys = append(keys, k)
+	}
+	for _, f := range head.Files {
+		k := key{f.Group, f.Path}
+		after[k] = f
+		groups[f.Group] = true
+		if _, ok := before[k]; !ok {
+			keys = append(keys, k)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].group != keys[j].group {
+			return keys[i].group < keys[j].group
+		}
+		return keys[i].path < keys[j].path
+	})
+
+	changed := map[string]bool{}
+	hidden := false
+	for _, k := range keys {
+		b, hadBefore := before[k]
+		a, hasAfter := after[k]
+		class := FileClass(k.group)
+		var e Entry
+		switch {
+		case !hadBefore:
+			e = opts.entry(class, fmt.Sprintf("%s was added", k.path), "", short(a.Hash), "")
+		case !hasAfter:
+			e = opts.entry(class, fmt.Sprintf("%s was removed", k.path), short(b.Hash), "", "")
+		case b.Hash != a.Hash:
+			e = opts.entry(class, fmt.Sprintf("%s changed", k.path), short(b.Hash), short(a.Hash), "")
+		default:
+			continue
+		}
+		e.Path = k.path
+		changed[k.group] = true
+		res.Entries = append(res.Entries, e)
+		// Reported for a file that is new or changed, and not for one that was already like
+		// this: a finding nobody in this pull request caused would be red on every one of them.
+		if hasAfter && a.HiddenCharacters > 0 {
+			h := opts.entry(ClassHiddenCharacters,
+				fmt.Sprintf("%s contains %s", k.path, hiddenCount(a.HiddenCharacters)), "", "", hiddenDetail)
+			h.Path = k.path
+			hidden = true
+			res.Entries = append(res.Entries, h)
+		}
+	}
+	for group := range groups {
+		if !changed[group] {
+			res.Unchanged = append(res.Unchanged, FileClass(group))
+		}
+	}
+	// The prompt and the tool descriptions add their own entries of this class, so it is
+	// unchanged only if nothing anywhere reported it.
+	if !hidden {
+		for _, e := range res.Entries {
+			if e.Class == ClassHiddenCharacters {
+				hidden = true
+				break
+			}
+		}
+	}
+	if !hidden {
+		res.Unchanged = append(res.Unchanged, ClassHiddenCharacters)
+	}
 }
 
 func compareTools(base, head *manifest.Manifest, opts Options, res *Result) {
@@ -342,33 +533,24 @@ func compareTools(base, head *manifest.Manifest, opts Options, res *Result) {
 	for _, name := range names {
 		b, hadBefore := before[name]
 		a, hasAfter := after[name]
+		first := len(res.Entries)
 		switch {
 		case !hadBefore:
 			toolsChanged = true
-			res.Entries = append(res.Entries, Entry{
-				Class:    ClassTools,
-				Severity: opts.severityFor(ClassTools),
-				Summary:  fmt.Sprintf("tool %q was added", name),
-				After:    name,
-			})
+			res.Entries = append(res.Entries, opts.entry(ClassTools, fmt.Sprintf("tool %q was added", name), "", name, ""))
+			if a.HiddenCharacters > 0 {
+				res.Entries = append(res.Entries, opts.entry(ClassHiddenCharacters,
+					fmt.Sprintf("the description of tool %q contains %s", name, hiddenCount(a.HiddenCharacters)), "", "", hiddenDetail))
+			}
 		case !hasAfter:
 			toolsChanged = true
-			res.Entries = append(res.Entries, Entry{
-				Class:    ClassTools,
-				Severity: opts.severityFor(ClassTools),
-				Summary:  fmt.Sprintf("tool %q was removed", name),
-				Before:   name,
-			})
+			res.Entries = append(res.Entries, opts.entry(ClassTools, fmt.Sprintf("tool %q was removed", name), name, "", ""))
 		default:
 			if b.SchemaHash != a.SchemaHash {
 				toolsChanged = true
-				res.Entries = append(res.Entries, Entry{
-					Class:    ClassTools,
-					Severity: opts.severityFor(ClassTools),
-					Summary:  fmt.Sprintf("the schema of tool %q changed", name),
-					Before:   short(b.SchemaHash),
-					After:    short(a.SchemaHash),
-				})
+				res.Entries = append(res.Entries, opts.entry(ClassTools,
+					fmt.Sprintf("the definition of tool %q changed", name), short(b.SchemaHash), short(a.SchemaHash),
+					"its parameter schema or another field of the definition, other than the description"))
 			}
 			// The hash is the signal; the token delta is detail on the same entry, not a
 			// second entry. A description can be rewritten entirely without changing its
@@ -383,31 +565,33 @@ func compareTools(base, head *manifest.Manifest, opts Options, res *Result) {
 			delta := a.DescriptionTokens - b.DescriptionTokens
 			if beforeHash != afterHash {
 				toolsChanged = true
+				// The size and what it costs ride on the entry for the edit. They used to be
+				// printed only for a count that moved under an unchanged description, which no
+				// edit can produce, so the projection a team configured was never shown.
 				detail := ""
 				if delta != 0 {
-					detail = fmt.Sprintf("the description is %d tokens %s", abs(delta), changeWord(delta))
+					detail = fmt.Sprintf("the description %s by %s, estimated as words", changeWord(delta), tokens(abs(delta)))
+					if projection := costProjection(delta, opts); projection != "" {
+						detail += ": " + projection
+					}
 				}
-				res.Entries = append(res.Entries, Entry{
-					Class:    ClassToolDescription,
-					Severity: opts.severityFor(ClassToolDescription),
-					Summary:  fmt.Sprintf("the description of tool %q changed", name),
-					Before:   short(beforeHash),
-					After:    short(afterHash),
-					Detail:   detail,
-				})
+				res.Entries = append(res.Entries, opts.entry(ClassToolDescription,
+					fmt.Sprintf("the description of tool %q changed", name), short(beforeHash), short(afterHash), detail))
+				if a.HiddenCharacters > 0 {
+					res.Entries = append(res.Entries, opts.entry(ClassHiddenCharacters,
+						fmt.Sprintf("the description of tool %q contains %s", name, hiddenCount(a.HiddenCharacters)), "", "", hiddenDetail))
+				}
 			} else if delta != 0 {
 				// Same text, different count means the estimate changed under the same
 				// description, which is a capture bug rather than an edit.
 				toolsChanged = true
-				res.Entries = append(res.Entries, Entry{
-					Class:    ClassToolDescriptionTokens,
-					Severity: opts.severityFor(ClassToolDescriptionTokens),
-					Summary:  fmt.Sprintf("the description of tool %q %s by %d tokens", name, changeWord(delta), abs(delta)),
-					Before:   fmt.Sprintf("%d tokens", b.DescriptionTokens),
-					After:    fmt.Sprintf("%d tokens", a.DescriptionTokens),
-					Detail:   costProjection(delta, opts),
-				})
+				res.Entries = append(res.Entries, opts.entry(ClassToolDescriptionTokens,
+					fmt.Sprintf("the description of tool %q %s by %s", name, changeWord(delta), tokens(abs(delta))),
+					tokens(b.DescriptionTokens), tokens(a.DescriptionTokens), costProjection(delta, opts)))
 			}
+		}
+		for i := first; i < len(res.Entries); i++ {
+			res.Entries[i].Source, res.Entries[i].Subject = "tools", name
 		}
 	}
 	if !toolsChanged {
@@ -469,20 +653,11 @@ func variablesFingerprint(v map[string]string) string {
 	return string(b)
 }
 
-func contentHint(base, head *manifest.Manifest, kind string) string {
-	if hasContent(base, kind) && hasContent(head, kind) {
-		return "both manifests carry the captured text, so a text diff is possible"
+func tokens(n int) string {
+	if n == 1 {
+		return "1 token"
 	}
-	return "the manifests carry hashes only, so only the hash shows the change"
-}
-
-func hasContent(m *manifest.Manifest, kind string) bool {
-	for _, c := range m.Content {
-		if c.Kind == kind {
-			return true
-		}
-	}
-	return false
+	return fmt.Sprintf("%d tokens", n)
 }
 
 func changeWord(delta int) string {

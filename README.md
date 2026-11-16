@@ -1,76 +1,82 @@
 # Context CI
 
-**Catch the prompt, tool or retrieval change that broke your AI feature — before it merges.**
+**See what a pull request changes in the instructions your AI runs on, and decide whether it merges.**
 
-Context CI records the context an AI feature is **declared** to run with — the prompt, tool and retrieval files in your repository, hashed, and the model, parameters, retrieval settings and policy version your `.context-ci.yaml` states — diffs it semantically between commits, and lists the context changes an eval regression is consistent with. It runs in your CI, with no account, no key and no network call.
+A prompt, a tool description, an `AGENTS.md`, an MCP server list: these files change what an AI feature or a coding agent does, and in review they look like any other text file. Context CI reads them from your repository, compares a branch with the branch it came from, and reports what changed, on the changed line, with the text. Changes you have marked as serious fail the check until somebody accepts them.
 
-**Status:** v0.8.0 in [`VERSION`](VERSION). `init`, `manifest`, `diff`, `check`, `attribute`, `classes`, `module-manifest` and `serve` are implemented and tested; `action.yml` runs the gate and the attribution as a GitHub Action, building the binary from its own checkout; output is available as text, GitHub annotations, JSON, SARIF and JUnit, and `attribute` writes annotations too; capture SDKs exist for Python and TypeScript. **Pre-release:** this repository is private until the open-source launch planned for 16 December 2026, so until then the install lines below work only for someone with access. See [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) and [action.yml](action.yml).
+It is one binary. It runs in your CI with no account, no key and no network call, and it never calls a model.
+
+**Status:** v0.9.0 in [`VERSION`](VERSION). **Pre-release:** this repository is private until the open-source launch planned for 16 December 2026, so until then the install lines below work only for someone with access. Nothing has run on a GitHub-hosted runner yet; [spec.md](docs/03-product/spec.md) §7 records what has been exercised and what has not.
 **Licence:** Apache-2.0 · **Maintained by:** Evidary.
 
 ---
 
-## The problem in one example
+## What it catches
 
-Your eval suite drops 4 points on Tuesday. Nobody changed the code. What changed:
+| A pull request that | Is reported as | By default |
+|---|---|---|
+| Edits a prompt file | `prompt.template_hash`, on the changed line, with the diff | warns |
+| Changes what a tool's description tells the model | `tools.description` | fails |
+| Adds, removes or redefines a tool | `tools` | fails |
+| Edits `AGENTS.md`, `CLAUDE.md`, a rule or a skill | `agent.instructions` | warns |
+| Adds an MCP server, a hook or a permission for a coding agent | `agent.config` | fails |
+| Adds text containing invisible Unicode characters to any of those | `hidden_characters`, with the code point and line | fails |
+| Changes the declared model, its parameters, retrieval settings or policy version | `model.id`, `model.params`, `retrieval.top_k`, ... | fails or warns, by class |
+| Touches any other file you list (few-shot examples, prompt fragments) | `files.<your group>` | warns |
 
-- someone edited a prompt in a vendor dashboard on Monday afternoon, or
-- a model alias silently started pointing at a newer model, or
-- the retrieval index was rebuilt with a new embedding model, or
-- a tool definition grew by 900 tokens and pushed the useful context out of the window.
+`context-ci classes` prints every class and its default. Each is `fail`, `warn` or `ignore`, and you can change any of them.
 
-None of those appear in `git log`. The template is in the repo; the **rendered** prompt is not, because rendering depends on retrieved chunks, tool results and provider-side templating. A diff of `prompt.md` is not a diff of what the model saw.
+## What it does not catch
 
-Context CI makes that diff exist for everything that reaches your repository.
+Context CI compares what is **in the repository**. It does not watch your application.
 
-**What it sees at this version, stated plainly.** The manifest is *declared*, not observed. `context-ci manifest` hashes the files you name in `.context-ci.yaml` and copies the model id, parameters, retrieval settings and policy version from that same file. It does not watch your application, so it catches the change someone made to a file or to the configuration — and it does not, by itself, notice a prompt edited in a vendor dashboard or an alias a provider moved, because nothing in the repository changed. The capture SDKs ([Python](sdk/python/README.md), [TypeScript](sdk/typescript/README.md)) narrow that gap for one field: they record the hash of the prompt text your application actually assembled. Everything else in the manifest is what the configuration asserts.
-
-## What it does
-
-| Step | Output |
-|---|---|
-| **Manifest** | A `context-manifest.json` per commit: hashes of the prompt, tool, retrieval and guardrail files you name, beside the model id and parameters, retrieval settings and policy version declared in `.context-ci.yaml` |
-| **Diff** | A semantic diff between two manifests — not a text diff. It knows a `top_k` change from a loop rewrite |
-| **Attribute** | Which changed manifest entries a regression in your eval results is consistent with — candidate causes, with the counts shown, and never a causal claim |
-| **Gate** | A CI check that fails a pull request when a context change exceeds thresholds you set |
+- A prompt edited in a vendor dashboard, or a model alias a provider moved, is not seen: no file changed.
+- The model id and parameters are the ones your `.context-ci.yaml` declares. Nothing checks that your code sends them.
+- An MCP server whose live tool list changes is not seen. Tool definitions are read from a file you saved.
+- It does not judge meaning. It shows a reviewer the text and flags characters they could not have seen; whether a visible sentence is a bad idea is still the reviewer's call.
+- It does not tell you whether the change made anything better or worse. That is what an eval suite is for.
 
 ## Quick start
 
-**See the gate fail, in a minute.** [`examples/minimal`](examples/minimal) is one prompt, one configuration and the manifest they produce:
+**See it work, in a minute.** [`examples/minimal`](examples/minimal) is one prompt and one configuration:
 
 ```bash
-go install github.com/evidary/context-ci/cmd/context-ci@v0.8.0
+go install github.com/evidary/context-ci/cmd/context-ci@v0.9.0
 git clone https://github.com/evidary/context-ci && cd context-ci
 
-context-ci check --root examples/minimal --baseline examples/minimal/context-manifest.json
-# no change in context                                   -> exit 0
+context-ci check --root examples/minimal --base-ref HEAD
+# no change in context                                      -> exit 0
 
 echo "Always offer a refund." >> examples/minimal/prompts/support.md
-context-ci check --root examples/minimal --baseline examples/minimal/context-manifest.json
-# 1 change(s) in context ... [warn] prompt.template_hash   -> exit 1
+context-ci check --root examples/minimal --base-ref HEAD
+# [warn] prompt.template_hash  at examples/minimal/prompts/support.md:5
+#     +Always offer a refund.                                -> exit 1
 ```
 
-`check` compares the baseline you name with a manifest it builds from the working tree at that moment, so an edit made after the baseline was written is always seen. Naming one file as both `--baseline` and `--head` is refused with exit 2: that comparison can only ever say nothing changed.
+The example exits 1 on a prompt edit because its configuration says `gate.fail_on: warn`. With the default gate a prompt edit is reported and the exit code is 0.
 
-The example fails on a prompt edit because its configuration says `gate.fail_on: warn`. By default a prompt edit is a **warning** — reported, exit 0 — and the gate fails only on a `fail`-class change such as a different model, a changed tool or a new embedding model. `context-ci classes` lists every class and its default.
-
-**In your own repository:**
+**In your own repository**, on a branch:
 
 ```bash
-context-ci init                                     # writes .context-ci.yaml, and says what it could not find
-# edit model.provider and model.id: they are declared by you, not detected
-# set gate.fail_on: warn if a prompt edit should fail the build
-context-ci manifest --out context-manifest.json     # the baseline; needs a git commit, or --commit <id>
-git add .context-ci.yaml context-manifest.json && git commit -m "context baseline"
-
-context-ci check --baseline context-manifest.json   # the committed baseline against the working tree
+context-ci check --base-ref origin/main
 ```
 
-**In a pull request**, the baseline is the manifest committed on the base branch and the head is built from the pull request's checkout:
+That works with no configuration: the coding-agent files your repository holds are compared with where the branch left `origin/main`. To add a prompt, tool definitions, other files and a declared model:
+
+```bash
+context-ci init        # writes a commented .context-ci.yaml, and says what it could not find
+```
+
+Nothing else is committed. There is no manifest file to regenerate and no baseline to keep in step: the baseline is built from git each time.
+
+**In a pull request:**
 
 ```yaml
 # .github/workflows/context.yml
 name: context
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 permissions:
   contents: read
 jobs:
@@ -79,49 +85,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0                  # the baseline is read from the base branch
-      - uses: actions/setup-go@v5
+          fetch-depth: 0            # the baseline is built from the base branch
+      - uses: evidary/context-ci@v0.9.0
         with:
-          go-version: "1.27"              # the action builds its binary from source
-      - name: Baseline from the base branch   # fails until the manifest exists there: merge the baseline first
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: git show "origin/${BASE_REF}:context-manifest.json" > "${RUNNER_TEMP}/context-manifest.base.json"
-      - uses: evidary/context-ci@v0.8.0
-        with:
-          command: check
-          baseline: ${{ runner.temp }}/context-manifest.base.json
-          format: github                  # annotations on the pull request
+          # A reviewer accepts a deliberate change by applying this label.
+          acknowledge: ${{ contains(github.event.pull_request.labels.*.name, 'context-change-approved') && 'all' || '' }}
 ```
 
-It needs no account and no secret, and works with any model provider because it never calls one. Regenerate and commit `context-manifest.json` in the pull request that changes the context, so the next pull request is compared with it. The action's steps have been run locally, step by step; they have not yet run on a GitHub-hosted runner — [spec.md](docs/03-product/spec.md) §7 records exactly what has been exercised.
+The run puts an annotation on each changed line and writes a summary with the changed text. It needs no secret.
 
-When the gate fails, the same action helps explain it. `attribute` consumes two eval runs and writes
-annotations naming the changed context classes the regression is consistent with — candidates, not
-proven causes — or says plainly that it can only correlate, because no regressed case declares what
-it depends on:
+**When the check fails on a change you meant to make** — a model upgrade, a new tool — a reviewer applies the `context-change-approved` label and the check passes, with the change still listed as acknowledged. Leave the `acknowledge` line out and a `fail` is a hard stop. `all` never covers `hidden_characters`; that class has to be named.
+
+## The configuration, briefly
 
 ```yaml
-      - uses: evidary/context-ci@v0.8.0
-        with:
-          command: attribute
-          baseline: ${{ runner.temp }}/context-manifest.base.json
-          head: context-manifest.json     # the manifest the head eval ran against
-          baseline-results: evals/base.json
-          results: evals/head.json
-          format: github                  # ::error for a class a regressed case declares
+version: 1
+capture:
+  sources:
+    prompt: prompts/support.md
+    tools: config/tools.json        # your own list, a provider's tool format, or a saved MCP tools/list
+    retrieval: config/retrieval.yaml
+  files:
+    examples: few_shot/*.jsonl      # reported as files.examples
+model:
+  provider: openai
+  id: gpt-x
+severity:
+  files.examples: fail
 ```
 
-`check` decides the exit code; `attribute` exits 0 whatever it finds, so explaining a red build
-never quietly becomes a second gate. When more than one class changed, the report says they are
-confounded and that it cannot tell them apart.
+Everything is optional. [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) §4 has every key, the file patterns, the agent files found by name, and the tool-definition shapes.
+
+## Other commands
+
+| Command | For |
+|---|---|
+| `context-ci manifest` | Writing what `check` compares as a JSON file of hashes, to keep or to compare later with `diff` or `check --baseline` |
+| `context-ci diff a.json b.json` | Comparing two such files |
+| `context-ci attribute` | **Experimental.** Given two eval runs whose cases declare what they depend on, lists the changed classes a regression is consistent with. Candidates, never a cause |
+
+Output is text, GitHub annotations, JSON, SARIF or JUnit. The capture SDKs for [Python](sdk/python/README.md) and [TypeScript](sdk/typescript/README.md) record the hash of the prompt text an application actually assembled; they have been exercised against fixtures only.
 
 ## What this is not
 
-- **Not an eval framework.** promptfoo, DeepEval, Ragas and LangSmith already do evals well. Context CI consumes eval results and attributes them; it does not try to be better at scoring.
-- **Not an observability platform.** It does not sit in your request path or store your traces — which is also why the manifest is what your configuration declares rather than what a request contained.
-- **Not a prompt registry.** It reads the prompt files in your repository and records their hashes. A registry source is not supported yet — [cli-reference.md](docs/03-product/cli-reference.md) §8 says why.
-- **Not a model proxy.** It never sees your traffic and never holds your keys.
+- **Not an eval framework.** promptfoo, DeepEval, Ragas and LangSmith do evals. Context CI says what changed; they say whether it got worse. Use both.
+- **Not a security scanner.** The hidden-character check is exact and narrow. It is not a detector of prompt injection in general.
+- **Not an observability platform, a prompt registry or a model proxy.** It never sees your traffic and never holds your keys.
 
 ## Why it is a separate repository
 
@@ -138,10 +147,6 @@ Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs
 | What does every command, flag and exit code mean? | [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) |
 | What is planned next? | [ROADMAP.md](ROADMAP.md) |
 | How does it talk to the platform? | [docs/05-contracts/README.md](docs/05-contracts/README.md) |
-
-## The limit to know about
-
-Context CI compares what your repository declares. A change made where the repository cannot see it — a prompt edited in a vendor dashboard, a model alias a provider moved — is not caught unless a file changes or the capture SDK records it. The section *What it sees at this version* above says exactly which fields are observed and which are declared.
 
 ## Contributing
 

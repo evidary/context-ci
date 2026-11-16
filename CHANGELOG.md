@@ -6,6 +6,81 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-16
+
+**The check no longer needs anything committed, and it says what changed.** A review of 0.8 against
+how the tool would be used on a real team found that the committed manifest it depended on could
+not survive two people: every pair of branches that regenerated it conflicted, a change merged
+without regenerating it was blamed on the next pull request, and a comment in a retrieval file
+failed the gate. This release replaces that workflow. Nothing here has run on a hosted runner.
+
+**Breaking:** the manifest is `manifest_version: 2` and version 1 files are rejected; digests
+differ from 0.8 for the same inputs; the retrieval and guardrails hashes are of parsed values;
+tool schema hashes changed; a missing `.context-ci.yaml` is no longer an error;
+`examples/minimal/context-manifest.json` is gone; the action's `baseline` input is no longer
+required and its `version` input now prefers a release binary.
+
+### Added
+
+- **`check --base-ref <ref>`.** The baseline is built from the merge base of `<ref>` and `HEAD`,
+  read through git with the configuration that commit had, and compared with the working tree.
+  No manifest is committed. `--baseline <file>` still works, and exactly one of the two is
+  required.
+- **Where and what.** Each entry about a file carries its path and first changed line; `check`
+  prints the changed lines from `git diff` for prompt, tool, instruction and group files, at most
+  60 per file; `--no-text` leaves them out. GitHub annotations carry `file=` and `line=`, SARIF
+  results carry `locations`, and `--summary <file>` appends a Markdown report.
+- **`check --acknowledge <classes|all>`.** An accepted change is reported as acknowledged and does
+  not fail the gate. `all` does not cover `hidden_characters`.
+- **File groups.** `capture.files` maps a name to glob patterns; each group is a class
+  `files.<group>`, and each file is reported by path.
+- **Agent files, with no configuration.** `AGENTS.md`, `CLAUDE.md`, rule and skill directories are
+  `agent.instructions` (warn); MCP, hook and settings files are `agent.config` (fail). A
+  repository with no `.context-ci.yaml` is checked with these defaults.
+- **`hidden_characters`** (fail): a new or changed prompt, tool description or file that contains
+  invisible or direction-changing Unicode characters, with the code point and line of the first.
+- **Tool definitions in common shapes**: chat-completions function tools, the flattened form,
+  `input_schema`, function declarations, and a saved MCP `tools/list` response, in YAML or JSON.
+  Written from the documented formats; not checked against vendor exports.
+- **The action** takes `base-ref` (defaulting to the pull request's base branch), `acknowledge`,
+  `summary` and `text`; downloads the release binary and checks it against `SHA256SUMS` when it is
+  named with a release tag, building from source otherwise; and writes the job summary.
+
+### Changed
+
+- **The digest covers the context only.** `commit` joins `created_at` outside it, so the same
+  files have the same digest on every commit. `model` and `prompt` are optional in a manifest and
+  in the configuration.
+- **Retrieval and guardrails files are parsed before they are hashed.** A comment, key order or
+  formatting is not a change. A file that is not YAML or JSON is hashed as text.
+- **Every field of a tool definition is hashed**, not only `schema`; the description is still
+  hashed alone. A changed definition says "the definition of tool X changed".
+- **Credential values are replaced, not removed with their keys.** A tool that gains a `token`
+  parameter has changed; before, the whole key was dropped and the change was invisible.
+- **`init` leaves the prompt line commented out when it finds no prompt**, so the file it writes
+  works as written.
+- **The cost projection is attached to `tools.description`** when a description grows, where it
+  can be reached; it was on a class that current manifests never emit. It is labelled as an
+  estimate from a word count.
+- **`attribute` is marked experimental**, counts changed classes instead of entries when it says
+  changes are confounded, and refuses one file as both manifests.
+- The README no longer leads with changes this tool cannot see, and states what it does not catch.
+
+### Removed
+
+- `examples/minimal/context-manifest.json`, and the instruction to commit and regenerate a
+  manifest.
+
+### Not verified
+
+- Nothing has run on a GitHub-hosted runner: `ci.yml`, the action's download, checksum and
+  fallback paths, the default base ref on a pull request and the job summary.
+- The GitLab CI and CircleCI snippets were rewritten and not run.
+- SARIF with locations was not re-validated against the schema.
+- The defaults have not been run against repositories other than fixtures, so how often they
+  report something a team does not care about is unknown.
+
+
 ## [0.8.0] — 2026-11-16
 
 **The gate could not fail, and now it can.** An audit on 16 November 2026 ran the built binary

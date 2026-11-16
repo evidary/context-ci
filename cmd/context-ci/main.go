@@ -46,12 +46,12 @@ const ManifestFileName = "context-manifest.json"
 const usage = `context-ci — fail the build when the context a model sees changes
 
 usage:
+  context-ci check [flags]        compare the working tree with a base commit, or a manifest, and gate
   context-ci init [flags]         write a starter .context-ci.yaml for this checkout
   context-ci manifest [flags]     write %s for this checkout
   context-ci diff <base> <head>   semantic diff between two manifests
-  context-ci check [flags]        diff the baseline against the working tree and gate
-  context-ci attribute [flags]    list the changed classes a regression is consistent with
   context-ci classes              list the diff classes and their defaults
+  context-ci attribute [flags]    experimental: join two eval runs to the classes that changed
 
   context-ci module-manifest      write module-manifest.v1.json, for the optional platform integration
   context-ci serve [--addr]       GET /healthz and GET /readyz, so the manifest's health_path is real
@@ -148,7 +148,7 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	cfg, err := loadConfig(*configPath, *root)
+	cfg, _, err := loadConfigOrDefault(*configPath, *root, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return ExitUsage
@@ -170,6 +170,7 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		Commit:     resolvedCommit,
 		Now:        time.Now(),
 		SDKVersion: *sdkVer,
+		Warn:       warnTo(stderr),
 	}
 	if *captureFile != "" {
 		observed, err := capture.LoadObserved(*captureFile)
@@ -191,6 +192,12 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		return ExitManifest
 	}
 	body = append(body, '\n')
+	// check reports hidden characters only in what a change touched. This is where the ones that
+	// were already there are said, once, to whoever builds a manifest.
+	if found := hiddenIn(m, cfg.Capture.Sources[config.SourcePrompt]); len(found) > 0 {
+		fmt.Fprintf(stderr, "context-ci: hidden characters, which a reviewer cannot see and a model reads, are present in: %s\n",
+			strings.Join(found, ", "))
+	}
 
 	if *out == "" || *out == "-" {
 		stdout.Write(body)
@@ -245,8 +252,13 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	return ExitOK
 }
 
-// runCheck is the gate. The baseline is a manifest somebody committed; the head is, unless one is
-// named, built from the working tree at the moment of the check.
+// runCheck is the gate. The baseline is built from a base commit, or read from a manifest file;
+// the head is, unless one is named, built from the working tree at the moment of the check.
+//
+// --base-ref is the form a pull request uses. Nothing has to be committed for it and nothing can
+// go stale: the base branch's own files and its own configuration are the baseline. A committed
+// manifest, the only form there used to be, conflicted whenever two branches each regenerated it,
+// and when somebody forgot to, the next pull request was blamed for the change.
 //
 // It used to read the head from context-manifest.json by default. A workflow that also named that
 // file as its baseline - which is what the README told a team to write - compared a file with
@@ -257,12 +269,16 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	var (
 		configPath = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
 		root       = fs.String("root", ".", "repository root")
-		base       = fs.String("baseline", "", "base manifest (required)")
+		baseRef    = fs.String("base-ref", "", "git ref to build the baseline from, e.g. origin/main; the merge base with HEAD is used")
+		base       = fs.String("baseline", "", "base manifest file, instead of --base-ref")
 		head       = fs.String("head", "", "head manifest to read (default: built from the working tree at --root)")
 		commit     = fs.String("commit", "", "commit to record in the head built from the working tree (default: git HEAD)")
 		format     = fs.String("format", "text", "text, github, json, sarif or junit")
+		ack        = fs.String("acknowledge", "", "classes whose changes are accepted for this run, comma-separated, or all; they are reported and do not fail the gate")
+		summary    = fs.String("summary", "", "append a Markdown summary to this file, e.g. $GITHUB_STEP_SUMMARY")
+		noText     = fs.Bool("no-text", false, "leave the changed text of files out of the report")
 	)
-	positional, code, ok := parseArgs(fs, "context-ci check --baseline <base.json> [flags]", args, stdout, stderr)
+	positional, code, ok := parseArgs(fs, "context-ci check --base-ref <ref> [flags]", args, stdout, stderr)
 	if !ok {
 		return code
 	}
@@ -270,8 +286,17 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "check: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
-	if *base == "" {
-		fmt.Fprintf(stderr, "check: --baseline is required; without a baseline there is nothing to compare\n")
+	if *base == "" && *baseRef == "" {
+		fmt.Fprintf(stderr, "check: --base-ref or --baseline is required; without a baseline there is nothing to compare\n")
+		return ExitUsage
+	}
+	if *base != "" && *baseRef != "" {
+		fmt.Fprintf(stderr, "check: --base-ref builds the baseline from a commit and --baseline reads it from a file; pass one or the other\n")
+		return ExitUsage
+	}
+	acknowledged, acknowledgeAll, err := parseAcknowledge(*ack)
+	if err != nil {
+		fmt.Fprintf(stderr, "check: %v\n", err)
 		return ExitUsage
 	}
 	if *head != "" && *commit != "" {
@@ -286,15 +311,51 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	cfg, err := loadConfig(*configPath, *root)
+	cfg, configFound, err := loadConfigOrDefault(*configPath, *root, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return ExitUsage
 	}
-	baseManifest, err := readManifest(*base)
+	configRel, err := configRelativeToRoot(*configPath, *root)
 	if err != nil {
-		fmt.Fprintf(stderr, "check: baseline: %v\n", err)
-		return ExitManifest
+		fmt.Fprintf(stderr, "check: %v\n", err)
+		return ExitUsage
+	}
+	where := located{root: *root, cfg: cfg, noText: *noText}
+	if configFound {
+		where.configRel = configRel
+	}
+
+	var baseManifest *manifest.Manifest
+	if *baseRef != "" {
+		baseCommit, note, err := resolveBase(*root, *baseRef)
+		if err != nil {
+			fmt.Fprintf(stderr, "check: %v\n", err)
+			return ExitUsage
+		}
+		if note != "" {
+			fmt.Fprintf(stderr, "context-ci: %s\n", note)
+		}
+		tree := capture.GitTree(*root, baseCommit)
+		baseCfg, note := baseConfiguration(tree, configRel)
+		if note != "" {
+			fmt.Fprintf(stderr, "context-ci: %s\n", note)
+		}
+		baseManifest, err = capture.BuildTree(baseCfg, tree, capture.Options{
+			Commit: baseCommit, Now: time.Now(), Lenient: true, Warn: warnTo(stderr),
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "check: baseline: %v\n", err)
+			return ExitManifest
+		}
+		where.baseCommit = baseCommit
+		fmt.Fprintf(stderr, "context-ci: baseline built from %s (digest %s)\n", short(baseCommit), short(baseManifest.Digest))
+	} else {
+		baseManifest, err = readManifest(*base)
+		if err != nil {
+			fmt.Fprintf(stderr, "check: baseline: %v\n", err)
+			return ExitManifest
+		}
 	}
 	var headManifest *manifest.Manifest
 	if *head != "" {
@@ -313,7 +374,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "check: %v\n", err)
 			return ExitUsage
 		}
-		headManifest, err = capture.Build(cfg, *root, capture.Options{Commit: resolvedCommit, Now: time.Now()})
+		headManifest, err = capture.Build(cfg, *root, capture.Options{Commit: resolvedCommit, Now: time.Now(), Warn: warnTo(stderr)})
 		if err != nil {
 			fmt.Fprintf(stderr, "check: head: %v\n", err)
 			return ExitManifest
@@ -326,14 +387,27 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		Severity:        cfg.SeverityOverrides(),
 		CallsPerDay:     cfg.Gate.CallsPerDay,
 		InputUSDPerMTok: cfg.Gate.InputUSDPerMTok,
+		Acknowledge:     acknowledged,
+		AcknowledgeAll:  acknowledgeAll,
 	}
 	result := diff.Compare(baseManifest, headManifest, opts)
+	// A head read from a file was built somewhere else, from files this run cannot see.
+	if *head == "" {
+		annotate(result, where)
+	}
 
 	if err := writeResult(stdout, *format, result); err != nil {
 		fmt.Fprintf(stderr, "check: %v\n", err)
 		return ExitUsage
 	}
-	if failed(result, cfg.FailOn()) {
+	gateFailed := failed(result, cfg.FailOn())
+	if *summary != "" {
+		if err := appendSummary(*summary, result, gateFailed, cfg.FailOn()); err != nil {
+			fmt.Fprintf(stderr, "check: summary: %v\n", err)
+			return ExitUsage
+		}
+	}
+	if gateFailed {
 		return ExitGate
 	}
 	return ExitOK
@@ -363,15 +437,16 @@ func runClasses(stdout io.Writer) int {
 	return ExitOK
 }
 
-// failed reports whether the result breaches the configured threshold.
+// failed reports whether the result breaches the configured threshold. A change somebody
+// acknowledged is reported and does not count.
 func failed(r *diff.Result, failOn string) bool {
 	switch failOn {
 	case "never":
 		return false
 	case "warn":
-		return r.Worst() == diff.SeverityFail || r.Worst() == diff.SeverityWarn
+		return r.Gating() == diff.SeverityFail || r.Gating() == diff.SeverityWarn
 	default: // "fail"
-		return r.Worst() == diff.SeverityFail
+		return r.Gating() == diff.SeverityFail
 	}
 }
 
@@ -402,8 +477,15 @@ func writeText(w io.Writer, r *diff.Result) {
 	}
 	fmt.Fprintf(w, "%d change(s) in context\n\n", len(r.Entries))
 	for _, e := range r.Entries {
-		fmt.Fprintf(w, "  [%s] %s\n", e.Severity, e.Class)
+		label := string(e.Severity)
+		if e.Acknowledged {
+			label += ", acknowledged"
+		}
+		fmt.Fprintf(w, "  [%s] %s\n", label, e.Class)
 		fmt.Fprintf(w, "    %s\n", e.Summary)
+		if where := location(e); where != "" {
+			fmt.Fprintf(w, "    at %s\n", where)
+		}
 		if e.Before != "" || e.After != "" {
 			fmt.Fprintf(w, "    before: %s\n    after:  %s\n", orDash(e.Before), orDash(e.After))
 		}
@@ -411,10 +493,30 @@ func writeText(w io.Writer, r *diff.Result) {
 			fmt.Fprintf(w, "    %s\n", e.Detail)
 		}
 	}
+	for _, text := range r.Texts {
+		fmt.Fprintf(w, "\n  %s\n", text.Path)
+		for _, line := range strings.Split(text.Diff, "\n") {
+			fmt.Fprintf(w, "    %s\n", line)
+		}
+		if text.Omitted > 0 {
+			fmt.Fprintf(w, "    ... %d more line(s) not shown\n", text.Omitted)
+		}
+	}
 	if len(r.Unchanged) > 0 {
 		fmt.Fprintf(w, "\nunchanged: %s\n", joinClasses(r.Unchanged))
 	}
 	fmt.Fprintf(w, "\ndigest %s -> %s\n", short(r.BaseDigest), short(r.HeadDigest))
+}
+
+// location renders where an entry is, as path or path:line, or "" when it is nowhere in a file.
+func location(e diff.Entry) string {
+	if e.Path == "" {
+		return ""
+	}
+	if e.Line > 0 {
+		return fmt.Sprintf("%s:%d", e.Path, e.Line)
+	}
+	return e.Path
 }
 
 // writeGitHub emits workflow commands, so the failure appears on the pull request
@@ -430,19 +532,34 @@ func writeGitHub(w io.Writer, r *diff.Result) {
 		if e.Severity == diff.SeverityFail {
 			level = "error"
 		}
-		if e.Severity == diff.SeverityIgnore {
+		if e.Severity == diff.SeverityIgnore || e.Acknowledged {
 			level = "notice"
 		}
 		// The title is a property and the rest is the message. They have different
 		// escaping rules: a colon in a message is legal and must survive, while a
 		// colon in a property would end the property list early.
-		fmt.Fprintf(w, "::%s title=%s::%s",
-			level, escapeProperty("context-ci "+string(e.Class)), escapeData(e.Summary))
+		//
+		// file and line put the annotation on the pull request's diff, at the change. They are
+		// written only when known: an annotation with no file appears on the run, which is the
+		// right place for a change that is in no file.
+		properties := ""
+		if e.Path != "" {
+			properties = "file=" + escapeProperty(e.Path) + ","
+			if e.Line > 0 {
+				properties += fmt.Sprintf("line=%d,", e.Line)
+			}
+		}
+		summary := e.Summary
+		if e.Acknowledged {
+			summary = "acknowledged: " + summary
+		}
+		fmt.Fprintf(w, "::%s %stitle=%s::%s",
+			level, properties, escapeProperty("context-ci "+string(e.Class)), escapeData(summary))
 		if e.Before != "" || e.After != "" {
 			fmt.Fprintf(w, " (%s -> %s)", escapeData(orDash(e.Before)), escapeData(orDash(e.After)))
 		}
 		if e.Detail != "" {
-			fmt.Fprintf(w, " %s", escapeData(e.Detail))
+			fmt.Fprintf(w, ": %s", escapeData(e.Detail))
 		}
 		fmt.Fprintln(w)
 	}
@@ -503,6 +620,25 @@ func readManifest(path string) (*manifest.Manifest, error) {
 			"but its content hashes to %s", path, short(stored), short(recomputed))
 	}
 	return &m, nil
+}
+
+// loadConfigOrDefault reads the configuration, or returns the defaults when no path was named and
+// the default file does not exist. found says which.
+//
+// A repository with no configuration is not an error: the defaults find the coding-agent files a
+// repository has, and that is a useful answer to "what changed" before anybody has written a line
+// of YAML. A path somebody named and that is not there is still an error.
+func loadConfigOrDefault(path, root string, stderr io.Writer) (cfg *config.Config, found bool, err error) {
+	if path == "" {
+		candidate := filepath.Join(root, config.DefaultFile)
+		if _, statErr := os.Stat(candidate); errors.Is(statErr, os.ErrNotExist) {
+			fmt.Fprintf(stderr, "context-ci: no %s, so the defaults are in use: coding-agent files only, and no declared model. "+
+				"Run 'context-ci init' to name prompts, tools and a model\n", candidate)
+			return config.Default(), false, nil
+		}
+	}
+	cfg, err = loadConfig(path, root)
+	return cfg, err == nil, err
 }
 
 func loadConfig(path, root string) (*config.Config, error) {

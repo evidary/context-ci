@@ -174,12 +174,12 @@ func TestInitNamesOnlyFilesTheCheckoutHas(t *testing.T) {
 		files       map[string]string
 		dirs        []string
 		wantSources map[string]string
-		wantMissing string
+		wantMissing bool
 	}{
 		{
 			name:        "nothing to find",
-			wantSources: map[string]string{config.SourcePrompt: defaultPrompt},
-			wantMissing: defaultPrompt,
+			wantSources: map[string]string{},
+			wantMissing: true,
 		},
 		{
 			name:        "a prompt in a conventional place",
@@ -206,8 +206,8 @@ func TestInitNamesOnlyFilesTheCheckoutHas(t *testing.T) {
 		{
 			name:        "a directory with a source name is not a source",
 			dirs:        []string{"prompts/support.md"},
-			wantSources: map[string]string{config.SourcePrompt: defaultPrompt},
-			wantMissing: defaultPrompt,
+			wantSources: map[string]string{},
+			wantMissing: true,
 		},
 	}
 	for _, tc := range cases {
@@ -239,61 +239,58 @@ func TestInitNamesOnlyFilesTheCheckoutHas(t *testing.T) {
 				}
 			}
 			for kind, rel := range cfg.Capture.Sources {
-				if rel == tc.wantMissing {
-					continue
-				}
 				info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
 				if err != nil || !info.Mode().IsRegular() {
 					t.Errorf("source %s names %q, which is not a file in the checkout (%v)", kind, rel, err)
 				}
 			}
-			if tc.wantMissing != "" && !strings.Contains(stderr, tc.wantMissing) {
-				t.Errorf("init did not report the missing prompt %q: %s", tc.wantMissing, stderr)
-			}
-			if tc.wantMissing == "" && strings.Contains(stderr, "does not exist yet") {
-				t.Errorf("init reported a missing file it did not name: %s", stderr)
+			if reported := strings.Contains(stderr, "no prompt file found"); reported != tc.wantMissing {
+				t.Errorf("init said a prompt was missing: %v, want %v: %s", reported, tc.wantMissing, stderr)
 			}
 
-			// Where the prompt exists the file is usable as written, so the manifest must build.
-			promptPath := filepath.Join(root, filepath.FromSlash(cfg.Capture.Sources[config.SourcePrompt]))
-			if info, err := os.Stat(promptPath); err == nil && info.Mode().IsRegular() {
-				manifestFor(t, root, "head.json")
-			}
+			// The file is usable as written whatever was found, so the manifest must build.
+			manifestFor(t, root, "head.json")
 		})
 	}
 }
 
-// TestInitWithoutAPromptSaysWhichFileToCreate covers the one exception to the rule above. The
-// prompt source is required by the validator, so init names a documented default and the next
-// command fails until the file exists - which only works if init said so.
-func TestInitWithoutAPromptSaysWhichFileToCreate(t *testing.T) {
+// TestInitWithoutAPromptLeavesItOut covers a checkout with no prompt at a usual path. A prompt is
+// optional, so the line is written commented out, naming the documented path, and the file works
+// as it is. It used to be written live, pointing at a file nobody had created, so the first
+// manifest after init failed.
+func TestInitWithoutAPromptLeavesItOut(t *testing.T) {
 	root := t.TempDir()
 
 	code, _, stderr := initIn(t, "--root", root)
 	if code != ExitOK {
 		t.Fatalf("exit = %d, want %d: %s", code, ExitOK, stderr)
 	}
-	if !strings.Contains(stderr, defaultPrompt) {
-		t.Fatalf("init did not name the file it expects: %s", stderr)
+	if !strings.Contains(stderr, "no prompt file found") || !strings.Contains(stderr, "capture.sources.prompt") {
+		t.Fatalf("init did not say the prompt was left out, or which key holds it: %s", stderr)
 	}
-	if body := mustRead(t, filepath.Join(root, config.DefaultFile)); !strings.Contains(body, defaultPrompt) {
-		t.Fatalf("the file does not say which source it is waiting for:\n%s", body)
+	body := mustRead(t, filepath.Join(root, config.DefaultFile))
+	if !strings.Contains(body, "    # prompt: "+defaultPrompt) {
+		t.Fatalf("the file does not show the line to uncomment:\n%s", body)
 	}
 
 	var stdout, errOut bytes.Buffer
-	if code := run([]string{"manifest", "--root", root, "--commit", "9c1f2ab"}, &stdout, &errOut); code != ExitManifest {
-		t.Fatalf("manifest exit = %d, want %d: %s", code, ExitManifest, errOut.String())
+	if code := run([]string{"manifest", "--root", root, "--commit", "9c1f2ab"}, &stdout, &errOut); code != ExitOK {
+		t.Fatalf("manifest exit = %d, want %d for the file init wrote: %s", code, ExitOK, errOut.String())
 	}
-	if !strings.Contains(errOut.String(), defaultPrompt) {
-		t.Fatalf("manifest does not name the missing prompt: %s", errOut.String())
+	if strings.Contains(stdout.String(), `"prompt"`) {
+		t.Fatalf("a manifest with no prompt source still has a prompt entry:\n%s", stdout.String())
 	}
 
-	// Doing exactly what init asked for is enough to make the file usable, with no edit to it.
+	// Uncommenting the line and creating the file it names is all it takes to add the prompt.
+	write(t, root, config.DefaultFile, strings.Replace(body, "    # prompt: ", "    prompt: ", 1))
 	write(t, root, defaultPrompt, "You are a support agent.\n")
 	head := manifestFor(t, root, "head.json")
+	if !strings.Contains(mustRead(t, head), `"template_hash"`) {
+		t.Fatalf("the prompt is not in the manifest after it was configured:\n%s", mustRead(t, head))
+	}
 	errOut.Reset()
 	if code := run([]string{"check", "--root", root, "--baseline", head, "--commit", "9c1f2ab"}, &stdout, &errOut); code != ExitOK {
-		t.Fatalf("check exit = %d, want %d after creating the file init named: %s", code, ExitOK, errOut.String())
+		t.Fatalf("check exit = %d, want %d: %s", code, ExitOK, errOut.String())
 	}
 }
 

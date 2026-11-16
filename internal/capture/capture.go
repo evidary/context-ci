@@ -19,7 +19,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -45,6 +47,20 @@ type Options struct {
 	// file-hashed rendered prompt and marks the capture path instrumented. It exists because the
 	// rendered text is the one thing a configuration file cannot know.
 	Observed *Observed
+	// Lenient builds what it can instead of stopping at the first unreadable source. It is for a
+	// baseline built from an older commit: a source that did not exist there, or a file that did
+	// not parse there, is part of what the comparison has to report, and refusing to build would
+	// fail every later pull request, including the one that fixes it.
+	Lenient bool
+	// Warn receives what a reader should know and the manifest cannot say: a pattern that matched
+	// nothing, a source a lenient build skipped. Nil discards them.
+	Warn func(string)
+}
+
+func (o Options) warn(format string, args ...any) {
+	if o.Warn != nil {
+		o.Warn(fmt.Sprintf(format, args...))
+	}
 }
 
 // ErrOutsideRoot is returned for a source path that escapes the repository.
@@ -56,6 +72,11 @@ func (e ErrOutsideRoot) Error() string {
 
 // Build produces a manifest for the checkout at root.
 func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, error) {
+	return BuildTree(cfg, DirTree(root), opts)
+}
+
+// BuildTree produces a manifest for any tree: a directory, or the tree of a commit.
+func BuildTree(cfg *config.Config, tree Tree, opts Options) (*manifest.Manifest, error) {
 	if cfg == nil {
 		return nil, errors.New("capture: no configuration")
 	}
@@ -66,13 +87,38 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 		opts.Now = time.Now()
 	}
 
+	// The tools file is parsed, not hashed whole, so it is read where it is used.
 	hashes := make(map[string]string, len(cfg.Capture.Sources))
+	var template []byte
 	for _, kind := range sourceKinds(cfg) {
-		sum, err := hashFile(root, cfg.Capture.Sources[kind])
+		rel := cfg.Capture.Sources[kind]
+		data, err := tree.ReadFile(rel)
 		if err != nil {
-			return nil, sourceError(kind, cfg.Capture.Sources[kind], root, err)
+			if opts.Lenient {
+				opts.warn("%s has no readable %s (capture.sources.%s), so that source is absent from it", tree.Describe(), rel, kind)
+				continue
+			}
+			return nil, sourceError(kind, rel, tree.Describe(), err)
 		}
-		hashes[kind] = sum
+		switch kind {
+		case config.SourceTools:
+			continue
+		case config.SourceRetrieval, config.SourceGuardrails:
+			sum, err := hashStructured(rel, data)
+			if err != nil {
+				if !opts.Lenient {
+					return nil, fmt.Errorf("capture: capture.sources.%s: %w", kind, err)
+				}
+				opts.warn("%s in %s does not parse, so its bytes are compared instead of its values", rel, tree.Describe())
+				sum = HashNormalised(data)
+			}
+			hashes[kind] = sum
+		default:
+			if kind == config.SourcePrompt {
+				template = data
+			}
+			hashes[kind] = HashNormalised(data)
+		}
 	}
 
 	m := &manifest.Manifest{
@@ -83,23 +129,8 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 			Path:       cfg.Capture.Path,
 			SDKVersion: opts.SDKVersion,
 		},
-		Model: manifest.Model{
-			Provider: cfg.Model.Provider,
-			ID:       cfg.Model.ID,
-			AliasOf:  optional(cfg.Model.AliasOf),
-			Params: manifest.ModelParam{
-				Temperature: optional(string(cfg.Model.Params.Temperature)),
-				MaxTokens:   cfg.Model.Params.MaxTokens,
-				Seed:        optional(string(cfg.Model.Params.Seed)),
-				TopP:        optional(string(cfg.Model.Params.TopP)),
-			},
-		},
-		Prompt: manifest.Prompt{
-			TemplateHash: hashes[config.SourcePrompt],
-			RenderedHash: hashes[config.SourcePrompt],
-			Variables:    map[string]string{},
-		},
 		Tools: []manifest.Tool{},
+		Files: []manifest.File{},
 		Retrieval: manifest.Retrieval{
 			IndexID:               cfg.Retrieval.IndexID,
 			EmbeddingModel:        cfg.Retrieval.EmbeddingModel,
@@ -114,9 +145,36 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 		},
 	}
 
+	if cfg.HasModel() {
+		m.Model = manifest.Model{
+			Provider: cfg.Model.Provider,
+			ID:       cfg.Model.ID,
+			AliasOf:  optional(cfg.Model.AliasOf),
+			Params: manifest.ModelParam{
+				Temperature: optional(string(cfg.Model.Params.Temperature)),
+				MaxTokens:   cfg.Model.Params.MaxTokens,
+				Seed:        optional(string(cfg.Model.Params.Seed)),
+				TopP:        optional(string(cfg.Model.Params.TopP)),
+			},
+		}
+	}
+	promptHash, hasPrompt := hashes[config.SourcePrompt]
+	if hasPrompt {
+		hidden, _ := HiddenCharacters(string(template))
+		m.Prompt = manifest.Prompt{
+			TemplateHash:     promptHash,
+			RenderedHash:     promptHash,
+			Variables:        variablesIn(template),
+			HiddenCharacters: hidden,
+		}
+	}
+
 	if opts.Observed != nil {
 		// The rendered prompt came from the SDK, so the capture path is instrumented by
 		// definition: no file in the repository holds this text.
+		if m.Prompt.Variables == nil {
+			m.Prompt.Variables = map[string]string{}
+		}
 		m.Capture.Path = "instrumented"
 		m.Capture.SDKVersion = opts.Observed.SDKVersion
 		m.Capture.Reason = ""
@@ -125,30 +183,39 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 		if opts.Observed.Template != "" {
 			m.Prompt.TemplateHash = hashString(opts.Observed.Template)
 		}
-	} else if rendered, ok := hashes[config.SourceRendered]; ok {
+	} else if rendered, ok := hashes[config.SourceRendered]; ok && hasPrompt {
 		m.Prompt.RenderedHash = rendered
 		m.Prompt.RenderedSampleHash = &rendered
-	} else {
+	} else if hasPrompt {
 		// No rendered sample was supplied. Saying the rendered hash equals the
 		// template hash is true for an unrendered template and has to be stated,
 		// because a reader who assumed it was rendered would over-trust the result.
 		m.Capture.Reason = "no rendered sample supplied, so rendered_hash equals template_hash"
 	}
 
-	templatePath := cfg.Capture.Sources[config.SourcePrompt]
-	variables, err := variablesIn(root, templatePath)
+	if toolsPath, ok := cfg.Capture.Sources[config.SourceTools]; ok {
+		data, err := tree.ReadFile(toolsPath)
+		if err == nil {
+			var tools []manifest.Tool
+			if tools, err = ParseTools(data); err == nil {
+				m.Tools = tools
+			}
+		}
+		// A missing tools file was reported, or skipped, by the loop above.
+		var missing ErrMissingSource
+		if err != nil && !errors.As(err, &missing) {
+			if !opts.Lenient {
+				return nil, fmt.Errorf("capture: tools: %w", err)
+			}
+			opts.warn("%s in %s cannot be read as tool definitions (%v), so it lists no tools", toolsPath, tree.Describe(), err)
+		}
+	}
+
+	files, err := collectFiles(cfg, tree, opts)
 	if err != nil {
 		return nil, err
 	}
-	m.Prompt.Variables = variables
-
-	if toolsPath, ok := cfg.Capture.Sources[config.SourceTools]; ok {
-		tools, err := readTools(root, toolsPath)
-		if err != nil {
-			return nil, err
-		}
-		m.Tools = tools
-	}
+	m.Files = files
 
 	if _, err := m.Compute(); err != nil {
 		return nil, fmt.Errorf("capture: %w", err)
@@ -170,6 +237,171 @@ func CheckSources(cfg *config.Config, root string) error {
 		}
 	}
 	return nil
+}
+
+// maxGroupFiles bounds one group. A pattern that matches tens of thousands of files is a pattern
+// aimed at the wrong directory, and a manifest that size is one nobody reviews.
+const maxGroupFiles = 5000
+
+// collectFiles hashes every file the named groups and the built-in agent groups match.
+func collectFiles(cfg *config.Config, tree Tree, opts Options) ([]manifest.File, error) {
+	type group struct {
+		name     string
+		patterns []string
+		builtin  bool
+	}
+	var groups []group
+	for name, patterns := range cfg.Capture.Files {
+		groups = append(groups, group{name: name, patterns: patterns})
+	}
+	if cfg.AgentFilesEnabled() {
+		groups = append(groups,
+			group{name: GroupAgentInstructions, patterns: AgentInstructionPatterns, builtin: true},
+			group{name: GroupAgentConfig, patterns: AgentConfigPatterns, builtin: true})
+	}
+	out := []manifest.File{}
+	if len(groups) == 0 {
+		return out, nil
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].name < groups[j].name })
+
+	listing, err := tree.List()
+	if err != nil {
+		return nil, err
+	}
+	// The prompt source is reported as the prompt. A group whose pattern also covers it, as
+	// prompts/** does, would report the same edit a second time under another class.
+	promptSource := ""
+	if rel, ok := cfg.Capture.Sources[config.SourcePrompt]; ok {
+		promptSource = path.Clean(filepath.ToSlash(rel))
+	}
+	for _, g := range groups {
+		matched := map[string]bool{}
+		for _, pattern := range g.patterns {
+			found := false
+			for _, name := range listing {
+				if !g.builtin && name == promptSource {
+					found = found || MatchPattern(pattern, name)
+					continue
+				}
+				if MatchPattern(pattern, name) {
+					matched[name] = true
+					found = true
+				}
+			}
+			if found || g.builtin {
+				continue
+			}
+			// The listing leaves out what git ignores, and a path written out in full is a file
+			// somebody means, ignored or not.
+			if literalPath(pattern) {
+				if _, err := tree.ReadFile(pattern); err == nil {
+					matched[path.Clean(pattern)] = true
+					continue
+				}
+				if !opts.Lenient {
+					return nil, fmt.Errorf("capture: capture.files.%s names %s, which does not exist in %s: "+
+						"create it, or remove the line", g.name, pattern, tree.Describe())
+				}
+			}
+			opts.warn("capture.files.%s: %s matches no file in %s", g.name, pattern, tree.Describe())
+		}
+		if len(matched) > maxGroupFiles {
+			return nil, fmt.Errorf("capture: capture.files.%s matches %d files, over the limit of %d; narrow its patterns",
+				g.name, len(matched), maxGroupFiles)
+		}
+		names := make([]string, 0, len(matched))
+		for name := range matched {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			data, err := tree.ReadFile(name)
+			if err != nil {
+				// A built-in pattern can match a link that leaves the repository. Nobody named
+				// that file, so it is skipped and said, rather than failing a build over it.
+				if opts.Lenient || g.builtin {
+					opts.warn("%s in %s was not read (%v)", name, tree.Describe(), err)
+					continue
+				}
+				return nil, fmt.Errorf("capture: capture.files.%s: %w", g.name, err)
+			}
+			hidden, _ := HiddenCharacters(string(data))
+			out = append(out, manifest.File{Group: g.name, Path: name, Hash: HashNormalised(data), HiddenCharacters: hidden})
+		}
+	}
+	return out, nil
+}
+
+// hashStructured hashes a YAML or JSON file by what it says rather than how it is written, so a
+// comment, a reordered key or a reformatted list is not a change. Any other file is hashed as
+// text. A retrieval or guardrails file is read by a program, and a program sees the values.
+func hashStructured(rel string, data []byte) (string, error) {
+	switch strings.ToLower(path.Ext(filepath.ToSlash(rel))) {
+	case ".yaml", ".yml", ".json":
+	default:
+		return HashNormalised(data), nil
+	}
+	documents, err := decodeYAML(data)
+	if err != nil {
+		return "", fmt.Errorf("%s is not valid YAML: %w", rel, err)
+	}
+	canonical, err := json.Marshal(documents)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", rel, err)
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// decodeYAML returns every document in data as plain JSON-shaped values.
+func decodeYAML(data []byte) ([]any, error) {
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	documents := []any{}
+	for {
+		var doc any
+		if err := dec.Decode(&doc); err != nil {
+			if errors.Is(err, io.EOF) {
+				return documents, nil
+			}
+			return nil, err
+		}
+		documents = append(documents, plain(doc))
+	}
+}
+
+// plain turns what the YAML decoder produces into what the JSON encoder accepts and orders: every
+// map keyed by string, and no value it would refuse.
+func plain(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			out[k] = plain(val)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			out[fmt.Sprint(k)] = plain(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, item := range x {
+			out[i] = plain(item)
+		}
+		return out
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return fmt.Sprint(x)
+		}
+		return x
+	case time.Time:
+		return x.UTC().Format(time.RFC3339Nano)
+	default:
+		return x
+	}
 }
 
 // sourceKinds returns the configured source kinds in a fixed order, so that when two sources are
@@ -201,15 +433,6 @@ func sourceError(kind, rel, root string, err error) error {
 			"create that file, or point capture.sources.%s at the file that holds it", kind, rel, root, kind)
 	}
 	return fmt.Errorf("capture: source %s: %w", kind, err)
-}
-
-// hashFile hashes a file's content with line endings normalised to LF.
-func hashFile(root, rel string) (string, error) {
-	data, err := readInsideRoot(root, rel)
-	if err != nil {
-		return "", err
-	}
-	return HashNormalised(data), nil
 }
 
 // HashNormalised is the hash every text file in a manifest goes through. CRLF and
@@ -281,209 +504,12 @@ var variablePattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\
 // variablesIn lists the template placeholders, sorted, with no values. The manifest
 // records the shape of the variable set and not the data, so changing a value does
 // not change the digest but changing the set does.
-func variablesIn(root, rel string) (map[string]string, error) {
-	data, err := readInsideRoot(root, rel)
-	if err != nil {
-		return nil, fmt.Errorf("capture: prompt: %w", err)
-	}
+func variablesIn(template []byte) map[string]string {
 	out := map[string]string{}
-	for _, match := range variablePattern.FindAllStringSubmatch(string(data), -1) {
+	for _, match := range variablePattern.FindAllStringSubmatch(string(template), -1) {
 		out[match[1]] = "string"
 	}
-	return out, nil
-}
-
-// toolsFile is the shape of capture.sources.tools.
-type toolsFile struct {
-	Tools []toolEntry `yaml:"tools"`
-}
-
-type toolEntry struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Schema      any    `yaml:"schema"`
-}
-
-// readTools parses a tools file into manifest entries. Each schema is hashed after
-// credential-shaped fields are removed, so a schema carrying a token in a default
-// value cannot put that token into a committed manifest.
-func readTools(root, rel string) ([]manifest.Tool, error) {
-	data, err := readInsideRoot(root, rel)
-	if err != nil {
-		return nil, fmt.Errorf("capture: tools: %w", err)
-	}
-	var parsed toolsFile
-	dec := yaml.NewDecoder(strings.NewReader(string(data)))
-	// A misspelled key is silently ignored by an unstructured decode, which hashes
-	// null and leaves the real value outside the digest: a schema edit would then be
-	// invisible. `schema` is deliberately `any`, so this rejects typos in the tools
-	// file's own keys without constraining the JSON Schema inside.
-	dec.KnownFields(true)
-	if err := dec.Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("capture: tools: %w", err)
-	}
-	// A second document in the same file used to be ignored, so the half of the file
-	// that was read could disagree with the half that was written.
-	var extra any
-	if err := dec.Decode(&extra); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("capture: tools: %w", err)
-	} else if err == nil {
-		return nil, errors.New("capture: tools: the file holds more than one YAML document")
-	}
-	out := make([]manifest.Tool, 0, len(parsed.Tools))
-	seen := make(map[string]bool, len(parsed.Tools))
-	for _, t := range parsed.Tools {
-		if t.Name == "" {
-			return nil, errors.New("capture: tools: every tool needs a name")
-		}
-		if seen[t.Name] {
-			return nil, fmt.Errorf("capture: tools: %q appears twice", t.Name)
-		}
-		seen[t.Name] = true
-
-		schema := redactSecretValues(stripCredentials(t.Schema))
-		canonical, err := json.Marshal(schema)
-		if err != nil {
-			return nil, fmt.Errorf("capture: tools: %q schema: %w", t.Name, err)
-		}
-		sum := sha256.Sum256(canonical)
-		descriptionHash := sha256.Sum256([]byte(t.Description))
-		out = append(out, manifest.Tool{
-			Name:            t.Name,
-			SchemaHash:      hex.EncodeToString(sum[:]),
-			DescriptionHash: ptrTo(hex.EncodeToString(descriptionHash[:])),
-			// Kept because a human reads it, and never used to detect a change: an edit
-			// that preserves the word count leaves it identical.
-			DescriptionTokens: EstimateTokens(t.Description),
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
-}
-
-func ptrTo(s string) *string { return &s }
-
-// credentialKeys are field names whose values never enter a hash input.
-var credentialKeys = map[string]bool{
-	"password": true, "passwd": true, "secret": true, "token": true,
-	"api_key": true, "apikey": true, "access_key": true, "secret_key": true,
-	"authorization": true, "auth": true, "credential": true, "credentials": true,
-	"private_key": true, "client_secret": true, "session_token": true,
-	"bearer": true, "cookie": true, "set_cookie": true,
-	"passphrase": true, "connection_string": true, "subscription_key": true,
-	// Spellings that camelCase or concatenation produces, and which an exact
-	// match on the underscore form missed.
-	"access_token": true, "refresh_token": true, "id_token": true,
-	"auth_token": true, "bearer_token": true, "api_secret": true,
-	"accesskey": true, "secretkey": true, "privatekey": true,
-	"accesstoken": true, "refreshtoken": true, "idtoken": true,
-	"authtoken": true, "bearertoken": true, "apisecret": true,
-	"clientsecret": true, "subscriptionkey": true, "connectionstring": true,
-}
-
-// isCredentialKey reports whether a field name holds a secret. Names are compared
-// with separators removed as well as exactly, so access_token, accessToken and
-// access-token all match one entry.
-//
-// The match is still exact rather than a substring test on purpose: max_tokens,
-// token_budget and secret_name are ordinary configuration, and removing them
-// would quietly delete schema content from the hash input.
-func isCredentialKey(name string) bool {
-	lower := strings.ToLower(name)
-	if credentialKeys[lower] {
-		return true
-	}
-	if !strings.ContainsAny(lower, "_-.") {
-		return false
-	}
-	return credentialKeys[strings.NewReplacer("_", "", "-", "", ".", "").Replace(lower)]
-}
-
-// stripCredentials removes credential-shaped fields from a decoded schema. It
-// matches on key name rather than value shape, because a value-shape matcher
-// produces false negatives that look like success.
-func stripCredentials(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			if isCredentialKey(k) {
-				continue
-			}
-			out[k] = stripCredentials(val)
-		}
-		return out
-	case map[any]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			name := fmt.Sprint(k)
-			if isCredentialKey(name) {
-				continue
-			}
-			out[name] = stripCredentials(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(x))
-		for i, item := range x {
-			out[i] = stripCredentials(item)
-		}
-		return out
-	default:
-		return x
-	}
-}
-
-// secretValuePatterns are shapes that are a credential whatever the field is called.
-// Key-name matching cannot see a token stored under `example`, `default` or
-// `sample`, and those are exactly where a copied-and-pasted real token ends up.
-//
-// This is a second line, not a replacement: a random secret with no recognisable
-// prefix is still missed. The key-name pass catches the field; this catches the
-// value that leaked into a field nobody thought to name.
-var secretValuePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`),                     // provider API keys
-	regexp.MustCompile(`\bsk_(live|test)_[A-Za-z0-9]{16,}`),           // payment processors
-	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),                        // AWS access key id
-	regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{36,}`),                // GitHub tokens
-	regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}`),              // Slack tokens
-	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`), // JWT
-	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),          // PEM private key
-	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`),                   // Google API key
-}
-
-// redactedValue replaces a recognised secret. It is a fixed marker rather than a
-// hash: a hash of a rotated token would change the digest on every rotation, which
-// is the noise redaction exists to remove.
-const redactedValue = "<redacted>"
-
-// redactSecretValues walks a decoded schema and replaces any string that looks like
-// a credential. The field itself stays, so the shape of the schema is still part of
-// the digest and a schema change is still visible.
-func redactSecretValues(v any) any {
-	switch x := v.(type) {
-	case string:
-		for _, re := range secretValuePatterns {
-			if re.MatchString(x) {
-				return redactedValue
-			}
-		}
-		return x
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			out[k] = redactSecretValues(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(x))
-		for i, item := range x {
-			out[i] = redactSecretValues(item)
-		}
-		return out
-	default:
-		return x
-	}
+	return out
 }
 
 // EstimateTokens approximates a token count as the number of whitespace-separated

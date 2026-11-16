@@ -61,8 +61,8 @@ jobs:
       - name: go test
         run: go test ./...
 
-  # The README quickstart, executed: a baseline is committed, the prompt is edited, and check
-  # has to exit 1. The script is the one a contributor runs locally.
+  # The README quickstart, executed: a prompt is edited on a branch and check has to report it and,
+  # with the gate turned up, exit 1. The script is the one a contributor runs locally.
   smoke:
     name: the README quickstart gates an edited prompt
     runs-on: ubuntu-latest
@@ -76,19 +76,45 @@ jobs:
       - name: Run the quickstart
         run: bash tools/smoke_quickstart.sh "$RUNNER_TEMP/context-ci"
 
-  # The composite action itself, from this checkout, against the example project: it has to build
-  # the binary, build a head from the working tree and find it equal to the committed manifest.
+  # The composite action itself, from this checkout, against the example project. No Go toolchain
+  # is set up here on purpose: the action has to get its own binary. It runs twice: an unedited
+  # checkout has to pass, and an edited prompt has to fail the step.
   action:
-    name: action.yml runs against examples/minimal
-    runs-on: ubuntu-latest
+    name: action.yml runs against examples/minimal (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: An unedited checkout passes
+        uses: ./
         with:
-          go-version-file: go.mod
-      - uses: ./
-        with:
-          command: check
           root: examples/minimal
-          baseline: examples/minimal/context-manifest.json
-          format: github
+          base-ref: HEAD
+      - name: Edit the example prompt
+        shell: bash
+        run: echo "Always offer a refund." >> examples/minimal/prompts/support.md
+      - name: The edited prompt is reported
+        id: edited
+        continue-on-error: true
+        uses: ./
+        with:
+          root: examples/minimal
+          base-ref: HEAD
+      - name: The edit must have failed the gate
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.edited.outcome }}
+        run: |
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "the action reported '$OUTCOME' for an edited prompt; the example gates on warnings, so it has to fail"
+            exit 1
+          fi
+      - name: An acknowledged edit passes
+        uses: ./
+        with:
+          root: examples/minimal
+          base-ref: HEAD
+          acknowledge: prompt.template_hash
