@@ -131,7 +131,9 @@ func TestInitReportsAnUnwritableDestination(t *testing.T) {
 	if !strings.Contains(stderr, config.DefaultFile) {
 		t.Fatalf("the failure does not name the destination: %q", stderr)
 	}
-	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+	// Any error will do: below a regular file Windows says the path does not exist and Linux and
+	// macOS say the parent is not a directory. What matters is that nothing is there.
+	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("something was written where nothing could be written")
 	}
 }
