@@ -57,17 +57,28 @@ func (t *dirTree) List() ([]string, error) {
 
 func (t *dirTree) list() ([]string, error) {
 	if out, err := runGit(t.root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"); err == nil {
+		// A symbolic link is not followed, in a commit or in a checkout. Where the file system
+		// has no links (Windows, by default) git checks one out as a small text file holding the
+		// target, which looks regular; the index is what still knows it is a link.
+		links := map[string]bool{}
+		if staged, err := runGit(t.root, "ls-files", "-z", "--stage"); err == nil {
+			for _, entry := range strings.Split(string(staged), "\x00") {
+				if meta, name, ok := strings.Cut(entry, "\t"); ok && strings.HasPrefix(meta, "120000 ") {
+					links[name] = true
+				}
+			}
+		}
 		var files []string
 		seen := map[string]bool{}
 		for _, name := range strings.Split(string(out), "\x00") {
-			if name == "" || seen[name] {
+			if name == "" || seen[name] || links[name] {
 				continue
 			}
 			seen[name] = true
 			// The index still lists a file deleted from the working tree, and the working tree
 			// is what is being captured.
 			info, err := os.Lstat(filepath.Join(t.root, filepath.FromSlash(name)))
-			if err != nil || info.IsDir() {
+			if err != nil || !info.Mode().IsRegular() {
 				continue
 			}
 			files = append(files, name)
@@ -84,6 +95,9 @@ func (t *dirTree) list() ([]string, error) {
 			if p != t.root && (d.Name() == ".git" || d.Name() == "node_modules") {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
 			return nil
 		}
 		rel, err := filepath.Rel(t.root, p)

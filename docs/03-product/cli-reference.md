@@ -387,7 +387,8 @@ path: added, removed or changed.
 - A pattern with no wildcard that matches nothing is an error, because it names a file somebody
   expected. A wildcard that matches nothing is a warning.
 - Files are listed through git where there is a repository, so ignored files are not matched; an
-  untracked file that is not ignored is. Symbolic links are not followed.
+  untracked file that is not ignored is. Symbolic links are not followed, and a link git checked
+  out as a text file, as it does on Windows, is still a link.
 - The file named as `sources.prompt` is left out of every group, so a prompt edit is reported once.
 - More than 5,000 matched files is refused.
 
@@ -719,7 +720,7 @@ truncated list cannot make a report look empty.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| CI-provider verification | GitHub Actions is exercised by this repository's own CI. The GitLab CI and CircleCI snippets have not run on those providers' runners. Dated in [spec.md](spec.md) §7 | When a user of either asks |
+| CI-provider verification | GitHub Actions is exercised by this repository's own CI. The GitLab CI and CircleCI commands were run in those providers' images, not on their runners. Dated in [spec.md](spec.md) §7 | When a user of either asks |
 | A comment on the pull request | The report goes to annotations and the job summary. A comment needs a token with write access, which a pull request from a fork does not get | After launch, if asked for |
 | Live MCP servers | Tool definitions are read from a file somebody saved. Nothing connects to a server | Not scheduled |
 | Token counts | `description_tokens` is a count of words. No tokenizer is bundled | Not scheduled |

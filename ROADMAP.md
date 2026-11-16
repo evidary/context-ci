@@ -26,7 +26,8 @@ This page is what is true now.
 |---|---|
 | Run the action on a real pull request | CI and the action pass on hosted Linux, macOS and Windows runners. The action's default base branch on a `pull_request` event has not been exercised, because no pull request has been opened against this repository since it was written |
 | Check the tool-definition shapes against files exported from each vendor's tooling | They were written from the documented formats and are covered by fixtures only |
-| Run it against real public repositories that hold agent files and prompts | The false-positive rate of the defaults is unknown until it is |
+| Run it against more public repositories that hold agent files and prompts | Three were tried and every report was a real edit; that is too few to call a false-positive rate |
+| Publish the 0.9.0 release | The documents pin `v0.9.0`, and the tag does not exist yet. Until it does, the install lines and `uses: evidary/context-ci@v0.9.0` do not resolve |
 | Someone outside the team installs from the README | Nobody has been asked yet |
 | Tag the release the documents pin | The install lines name a version that has to exist as a tag |
 | Decide on signed releases and an SBOM | Releases carry SHA-256 checksums only |

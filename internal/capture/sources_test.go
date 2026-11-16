@@ -471,6 +471,46 @@ func TestGitTreeReadsOnlyWhatTheCommitHolds(t *testing.T) {
 	}
 }
 
+// TestASymbolicLinkIsLeftOutOfBothTrees: a repository that links one skills directory to another
+// keeps the links in git with mode 120000. A file system with no links - Windows by default -
+// checks each out as a small text file holding the target, so the checkout listed it and the
+// commit did not, and every link was reported as a file somebody had added. This stages a link
+// the way such a checkout holds it, on any operating system.
+func TestASymbolicLinkIsLeftOutOfBothTrees(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	write(t, root, "skills/review/SKILL.md", "Review carefully.\n")
+	write(t, root, ".claude/skills/review", "../../skills/review")
+	gitIn(t, root, "init", "--quiet")
+	blob := gitIn(t, root, "hash-object", "-w", ".claude/skills/review")
+	gitIn(t, root, "add", "skills")
+	gitIn(t, root, "update-index", "--add", "--cacheinfo", "120000,"+blob+",.claude/skills/review")
+	gitIn(t, root, "commit", "--quiet", "-m", "base")
+	commit := gitIn(t, root, "rev-parse", "HEAD")
+
+	cfg := config.Default()
+	fromDisk, err := BuildTree(cfg, DirTree(root), Options{Commit: commit, Now: fixedTime})
+	if err != nil {
+		t.Fatalf("BuildTree(checkout) error = %v", err)
+	}
+	fromCommit, err := BuildTree(cfg, GitTree(root, commit), Options{Commit: commit, Now: fixedTime, Lenient: true})
+	if err != nil {
+		t.Fatalf("BuildTree(commit) error = %v", err)
+	}
+	want := []string{"agent.instructions skills/review/SKILL.md"}
+	if got := filesOf(fromDisk); !reflect.DeepEqual(got, want) {
+		t.Errorf("the checkout lists %q, want %q", got, want)
+	}
+	if got := filesOf(fromCommit); !reflect.DeepEqual(got, want) {
+		t.Errorf("the commit lists %q, want %q", got, want)
+	}
+	if fromDisk.Digest != fromCommit.Digest {
+		t.Error("a commit and its checkout differ when the repository holds a symbolic link")
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, item := range list {
 		if item == want {

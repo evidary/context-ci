@@ -78,16 +78,32 @@ required and its `version` input now prefers a release binary.
   others report "not a directory". `init` was correct. The failure kept the 0.8.0 release from
   publishing, so 0.8.0 has a tag and no binaries.
 
+- **A symbolic link was reported as an added file on Windows.** Git checks a link out as a
+  small text file where the file system has no links, so the checkout listed it and the commit
+  did not. Found by running against a public repository that links one skills directory to
+  another: 14 of its 17 reported changes were this. Links are now left out of both sides, on
+  every operating system.
+
 ### Verified, and not
 
 - `ci.yml` is green on GitHub-hosted Linux, macOS and Windows runners, including `action.yml` on
   all three with annotations on the changed line. The three report the same digest for the example.
+- The action's download step was extracted from `action.yml` and run on Windows and on Linux
+  against published releases: a release named by `version` or by the action's ref installs a
+  binary that matches `SHA256SUMS`; a branch, a commit, a tag with no assets and a tag that does
+  not exist fall back to building; a binary that does not match, or has no entry, stops the step.
+  It has not run inside a workflow, because no release of this version exists yet.
+- The GitLab CI and CircleCI commands were run in `golang:1.27-bookworm` and `cimg/go:1.27`
+  against a single-branch clone whose base branch had moved on: install from the public module,
+  the explicit fetch, then `check --base-ref` reporting the branch's own two changes and exit 1,
+  with a SARIF file written. Not on those providers' runners.
 - SARIF with locations validates against the OASIS 2.1.0 schema.
+- The defaults were run over the last 100 commits of three public repositories that hold agent
+  files: 0, 3 and 24 changes reported, each a real edit to an instruction, skill or settings
+  file, no hidden-character reports, and under five seconds on a 4,400-file repository. Three
+  repositories is a first look, not a false-positive rate.
 - Not exercised: the action's default base branch on a real pull request, and the rendered job
-  summary. The action's release-binary download runs for the first time against this release.
-- The GitLab CI and CircleCI snippets have not run on those providers.
-- The defaults have not been run against repositories other than fixtures, so how often they
-  report something a team does not care about is unknown.
+  summary.
 
 
 ## [0.8.0] — 2026-11-16
