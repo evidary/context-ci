@@ -211,6 +211,21 @@ func (c *Config) Validate() error {
 	if c.Model.ID == "" {
 		return errors.New("config: model.id is required")
 	}
+	// These three are refused here, with the configuration key in the message, rather than left
+	// for the manifest validator to refuse later: the manifest rejects them too, and a team should
+	// hear about its own file from the command that read it.
+	if !manifest.IsProvider(c.Model.Provider) {
+		if c.Model.Provider == "" {
+			return fmt.Errorf("config: model.provider is required: one of %s", strings.Join(manifest.Providers, ", "))
+		}
+		return fmt.Errorf("config: model.provider %q is not one of %s", c.Model.Provider, strings.Join(manifest.Providers, ", "))
+	}
+	if c.Model.Params.MaxTokens != nil && *c.Model.Params.MaxTokens < 0 {
+		return errors.New("config: model.params.max_tokens cannot be negative")
+	}
+	if c.Retrieval.TopK < 0 {
+		return errors.New("config: retrieval.top_k cannot be negative")
+	}
 
 	for name, sev := range c.Severity {
 		if !diff.IsKnownClass(name) {

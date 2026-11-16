@@ -186,7 +186,7 @@ func TestCredentialFieldsDoNotAffectTheHash(t *testing.T) {
 			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
 				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
 			}},
-			Model: config.Model{ID: "m"},
+			Model: config.Model{Provider: "other", ID: "m"},
 		}
 	}
 	at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
@@ -223,7 +223,7 @@ func TestCredentialSpellings(t *testing.T) {
 				Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
 					config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
 				}},
-				Model: config.Model{ID: "m"},
+				Model: config.Model{Provider: "other", ID: "m"},
 			}
 		}
 		at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
@@ -253,7 +253,7 @@ func TestOrdinaryFieldsSurvive(t *testing.T) {
 			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
 				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
 			}},
-			Model: config.Model{ID: "m"},
+			Model: config.Model{Provider: "other", ID: "m"},
 		}
 	}
 	at := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
@@ -280,7 +280,7 @@ func TestDescriptionEditWithTheSameLengthIsVisible(t *testing.T) {
 			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
 				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
 			}},
-			Model: config.Model{ID: "m"},
+			Model: config.Model{Provider: "other", ID: "m"},
 		}
 		return build(t, cfg, root, time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
 	}
@@ -317,7 +317,7 @@ func TestSecretValuesAreRedacted(t *testing.T) {
 			Capture: config.Capture{Path: manifest.CaptureAsserted, Sources: map[string]string{
 				config.SourcePrompt: "p.md", config.SourceTools: "tools.yaml",
 			}},
-			Model: config.Model{ID: "m"},
+			Model: config.Model{Provider: "other", ID: "m"},
 		}
 	}
 	build := func(toolsYAML string) *manifest.Manifest {

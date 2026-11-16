@@ -48,14 +48,15 @@ usage:
   context-ci init [flags]         write a starter .context-ci.yaml for this checkout
   context-ci manifest [flags]     write %s for this checkout
   context-ci diff <base> <head>   semantic diff between two manifests
-  context-ci check [flags]        diff against the baseline and gate
-  context-ci attribute [flags]    say which context class moved, when cases declare dependencies
+  context-ci check [flags]        diff the baseline against the working tree and gate
+  context-ci attribute [flags]    list the changed classes a regression is consistent with
   context-ci classes              list the diff classes and their defaults
 
   context-ci module-manifest      write the platform's module-manifest.v1.json
   context-ci serve [--addr]       GET /healthz and GET /readyz, so the manifest's health_path is real
   context-ci version              print the tool version
 
+Flags may be written before or after a verb's arguments.
 Run 'context-ci <verb> -h' for the flags of one verb.
 `
 
@@ -129,7 +130,6 @@ func resolveVersion(linked, module string) string {
 
 func runManifest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("manifest", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var (
 		configPath  = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
 		root        = fs.String("root", ".", "repository root to capture")
@@ -138,11 +138,12 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		sdkVer      = fs.String("sdk-version", "", "SDK version, for instrumented capture")
 		captureFile = fs.String("capture", "", "a capture file written by an SDK, for instrumented capture")
 	)
-	if err := fs.Parse(args); err != nil {
-		return ExitUsage
+	positional, code, ok := parseArgs(fs, "context-ci manifest [flags]", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "manifest: unexpected argument %q\n", fs.Arg(0))
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "manifest: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 
@@ -151,14 +152,17 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return ExitUsage
 	}
-	resolvedCommit := *commit
-	if resolvedCommit == "" {
-		resolvedCommit, err = gitHEAD(*root)
-		if err != nil {
-			fmt.Fprintf(stderr, "manifest: cannot determine the commit: %v\n"+
-				"pass --commit, because a manifest without a commit cannot be reproduced\n", err)
-			return ExitUsage
-		}
+	// The sources are checked before the commit is asked for. A first run in a fresh directory
+	// used to fail three times in a row - no repository, then no commit, then no prompt file -
+	// and the file is the one init has already said is missing, so it is reported first.
+	if err := capture.CheckSources(cfg, *root); err != nil {
+		fmt.Fprintf(stderr, "manifest: %v\n", err)
+		return ExitManifest
+	}
+	resolvedCommit, err := resolveCommit(*commit, *root)
+	if err != nil {
+		fmt.Fprintf(stderr, "manifest: %v\n", err)
+		return ExitUsage
 	}
 
 	options := capture.Options{
@@ -202,26 +206,26 @@ func runManifest(args []string, stdout, stderr io.Writer) int {
 
 func runDiff(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("diff", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var (
 		format     = fs.String("format", "text", "text, github, json, sarif or junit")
 		configPath = fs.String("config", "", "configuration file, for severity overrides")
 		root       = fs.String("root", ".", "repository root, for the configuration")
 	)
-	if err := fs.Parse(args); err != nil {
-		return ExitUsage
+	positional, code, ok := parseArgs(fs, "context-ci diff <base.json> <head.json> [flags]", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	if fs.NArg() != 2 {
-		fmt.Fprintf(stderr, "diff: need a base and a head manifest\n")
+	if len(positional) != 2 {
+		fmt.Fprintf(stderr, "diff: need a base and a head manifest, got %d argument(s)\n", len(positional))
 		return ExitUsage
 	}
 
-	base, err := readManifest(fs.Arg(0))
+	base, err := readManifest(positional[0])
 	if err != nil {
 		fmt.Fprintf(stderr, "diff: %v\n", err)
 		return ExitManifest
 	}
-	head, err := readManifest(fs.Arg(1))
+	head, err := readManifest(positional[1])
 	if err != nil {
 		fmt.Fprintf(stderr, "diff: %v\n", err)
 		return ExitManifest
@@ -240,25 +244,44 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	return ExitOK
 }
 
+// runCheck is the gate. The baseline is a manifest somebody committed; the head is, unless one is
+// named, built from the working tree at the moment of the check.
+//
+// It used to read the head from context-manifest.json by default. A workflow that also named that
+// file as its baseline - which is what the README told a team to write - compared a file with
+// itself, printed "no change" and exited 0 whatever had been edited. A gate that cannot fail is
+// worse than no gate, so the head is now computed, and naming one file as both sides is refused.
 func runCheck(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var (
 		configPath = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
 		root       = fs.String("root", ".", "repository root")
-		head       = fs.String("head", ManifestFileName, "head manifest")
 		base       = fs.String("baseline", "", "base manifest (required)")
+		head       = fs.String("head", "", "head manifest to read (default: built from the working tree at --root)")
+		commit     = fs.String("commit", "", "commit to record in the head built from the working tree (default: git HEAD)")
 		format     = fs.String("format", "text", "text, github, json, sarif or junit")
 	)
-	if err := fs.Parse(args); err != nil {
-		return ExitUsage
+	positional, code, ok := parseArgs(fs, "context-ci check --baseline <base.json> [flags]", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "check: unexpected argument %q\n", fs.Arg(0))
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "check: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 	if *base == "" {
 		fmt.Fprintf(stderr, "check: --baseline is required; without a baseline there is nothing to compare\n")
+		return ExitUsage
+	}
+	if *head != "" && *commit != "" {
+		fmt.Fprintf(stderr, "check: --commit names the commit of a head built from the working tree, "+
+			"and --head names a manifest that already records one; pass one or the other\n")
+		return ExitUsage
+	}
+	if *head != "" && sameFile(*base, *head) {
+		fmt.Fprintf(stderr, "check: --baseline and --head are the same file (%s), so the comparison could only "+
+			"ever say nothing changed; omit --head to compare the baseline against the working tree, "+
+			"or name a different head manifest\n", *base)
 		return ExitUsage
 	}
 
@@ -272,10 +295,30 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "check: baseline: %v\n", err)
 		return ExitManifest
 	}
-	headManifest, err := readManifest(*head)
-	if err != nil {
-		fmt.Fprintf(stderr, "check: head: %v\n", err)
-		return ExitManifest
+	var headManifest *manifest.Manifest
+	if *head != "" {
+		headManifest, err = readManifest(*head)
+		if err != nil {
+			fmt.Fprintf(stderr, "check: head: %v\n", err)
+			return ExitManifest
+		}
+	} else {
+		if err := capture.CheckSources(cfg, *root); err != nil {
+			fmt.Fprintf(stderr, "check: head: %v\n", err)
+			return ExitManifest
+		}
+		resolvedCommit, err := resolveCommit(*commit, *root)
+		if err != nil {
+			fmt.Fprintf(stderr, "check: %v\n", err)
+			return ExitUsage
+		}
+		headManifest, err = capture.Build(cfg, *root, capture.Options{Commit: resolvedCommit, Now: time.Now()})
+		if err != nil {
+			fmt.Fprintf(stderr, "check: head: %v\n", err)
+			return ExitManifest
+		}
+		// On stderr, so every --format stays exactly the report and nothing else.
+		fmt.Fprintf(stderr, "context-ci: head built from the working tree at %s (digest %s)\n", *root, short(headManifest.Digest))
 	}
 
 	opts := diff.Options{
@@ -293,6 +336,20 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		return ExitGate
 	}
 	return ExitOK
+}
+
+// sameFile reports whether two paths name one file. Comparing the strings is not enough: ./a.json
+// and a.json, a symbolic link and its target, and two spellings on a case-insensitive filesystem
+// are all one file.
+func sameFile(a, b string) bool {
+	infoA, errA := os.Stat(a)
+	infoB, errB := os.Stat(b)
+	if errA == nil && errB == nil {
+		return os.SameFile(infoA, infoB)
+	}
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && absA == absB
 }
 
 func runClasses(stdout io.Writer) int {
@@ -418,6 +475,11 @@ func readManifest(path string) (*manifest.Manifest, error) {
 	}
 	var m manifest.Manifest
 	dec := json.NewDecoder(bytes.NewReader(raw))
+	// A field this reader does not know is outside the digest: it is dropped before the digest is
+	// recomputed, so the file would verify while carrying content nothing checked. The manifest
+	// schema has no extension point, so an unknown field is refused rather than ignored - the
+	// same rule the configuration and the eval results already follow.
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("%s is not a manifest: %w", path, err)
 	}
@@ -478,17 +540,48 @@ func diffOptions(path, root string) (diff.Options, error) {
 	}, nil
 }
 
-// gitHEAD reads the commit without a network call and without requiring the git
-// binary to be configured, because CI images vary.
-func gitHEAD(root string) (string, error) {
-	cmd := exec.Command("git", "-C", root, "rev-parse", "HEAD")
+// resolveCommit returns the commit a manifest records: the one the caller named, or git HEAD.
+//
+// git is asked two questions, so the answer says which thing is missing. The old single
+// `git rev-parse HEAD` printed git's own "fatal: not a git repository" in a fresh directory and
+// "unknown revision" one step later, and neither told a first-time user what to do next.
+func resolveCommit(flagValue, root string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+	const remedy = "a manifest records the commit it describes, so that it can be reproduced: " +
+		"run this inside a git repository that has at least one commit, or pass --commit <id>"
+	if _, err := exec.LookPath("git"); err != nil {
+		return "", fmt.Errorf("there is no commit to record, because git is not installed or not on PATH; %s", remedy)
+	}
+	if _, detail, err := git(root, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return "", fmt.Errorf("there is no commit to record, because %s is not a git repository git can read (%s); %s",
+			root, detail, remedy)
+	}
+	head, _, err := git(root, "rev-parse", "--verify", "--quiet", "HEAD")
+	if err != nil || head == "" {
+		return "", fmt.Errorf("there is no commit to record, because the git repository at %s has no commits yet; %s",
+			root, remedy)
+	}
+	return head, nil
+}
+
+// git runs one git command without a network call. It returns stdout, and the first line of what
+// git said on stderr so a failure can quote it.
+func git(root string, args ...string) (string, string, error) {
+	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%v: %s", err, strings.TrimSpace(errOut.String()))
+	err := cmd.Run()
+	detail := strings.TrimSpace(errOut.String())
+	if i := strings.IndexByte(detail, '\n'); i >= 0 {
+		detail = strings.TrimSpace(detail[:i])
 	}
-	return strings.TrimSpace(out.String()), nil
+	if detail == "" && err != nil {
+		detail = err.Error()
+	}
+	return strings.TrimSpace(out.String()), detail, err
 }
 
 func orDash(s string) string {

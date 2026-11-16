@@ -271,6 +271,38 @@ func TestGitHubAttributionEscapesAndNamesNoLocation(t *testing.T) {
 	}
 }
 
+// TestNoChangeIsAValidReportInEveryFormat is the same guarantee through the CLI, with two real
+// manifests: no format may print a null where its schema wants a list.
+func TestNoChangeIsAValidReportInEveryFormat(t *testing.T) {
+	root := repo(t, "gpt-x")
+	base := manifestFor(t, root, "base.json")
+	head := manifestFor(t, root, "head.json")
+	for _, format := range []string{"sarif", "json", "junit", "github", "text"} {
+		t.Run(format, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := run([]string{"diff", base, head, "--format", format}, &stdout, &stderr); code != ExitOK {
+				t.Fatalf("exit = %d: %s", code, stderr.String())
+			}
+			if stdout.Len() == 0 || strings.Contains(stdout.String(), "null") {
+				t.Fatalf("--format %s for an unchanged context:\n%s", format, stdout.String())
+			}
+		})
+	}
+}
+
+// TestSARIFResultsCarryNoLocation pins what the CLI reference now says. A manifest holds hashes,
+// not the file and line that produced them, so a result has no location to give; if one is ever
+// added, the reference's "no locations" sentence has to change with it.
+func TestSARIFResultsCarryNoLocation(t *testing.T) {
+	var buffer bytes.Buffer
+	if err := writeSARIF(&buffer, sampleResult(), "0.4.0"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buffer.String(), "locations") {
+		t.Fatalf("a SARIF result carries a location; update cli-reference.md §7:\n%s", buffer.String())
+	}
+}
+
 func TestFormattingAnEmptyDiffIsValidOutput(t *testing.T) {
 	empty := &diff.Result{}
 	var sarif, junit bytes.Buffer
@@ -283,6 +315,30 @@ func TestFormattingAnEmptyDiffIsValidOutput(t *testing.T) {
 	var document map[string]any
 	if err := json.Unmarshal(sarif.Bytes(), &document); err != nil {
 		t.Fatalf("SARIF for an empty diff is not JSON: %v", err)
+	}
+	// Well-formed JSON is not enough. The SARIF schema types rules and results as arrays, and a
+	// nil slice marshals as null: the report for "nothing changed" - the one a gate writes on
+	// every green build - was rejected by a validating consumer.
+	if strings.Contains(sarif.String(), "null") {
+		t.Fatalf("SARIF for an empty diff carries a null:\n%s", sarif.String())
+	}
+	sarifRun := document["runs"].([]any)[0].(map[string]any)
+	if results, ok := sarifRun["results"].([]any); !ok || len(results) != 0 {
+		t.Fatalf("results = %#v, want an empty array", sarifRun["results"])
+	}
+	driver := sarifRun["tool"].(map[string]any)["driver"].(map[string]any)
+	if rules, ok := driver["rules"].([]any); !ok || len(rules) != 0 {
+		t.Fatalf("rules = %#v, want an empty array", driver["rules"])
+	}
+	for _, want := range []string{`"rules": []`, `"results": []`} {
+		if !strings.Contains(sarif.String(), want) {
+			t.Fatalf("SARIF for an empty diff does not contain %s:\n%s", want, sarif.String())
+		}
+	}
+	// JUnit has no such trap - an empty suite is an element with no children - but it is pinned
+	// so that it stays a complete, countable document.
+	if !strings.Contains(junit.String(), `<testsuite name="context-ci" tests="0" failures="0" errors="0" skipped="0">`) {
+		t.Fatalf("JUnit for an empty diff is not an empty suite:\n%s", junit.String())
 	}
 	var suite struct {
 		Tests int `xml:"tests,attr"`

@@ -12,11 +12,18 @@
 ## Running the checks
 
 ```
-python tools/check_docs.py     # links, tables, encoding, index coverage
+python tools/check_docs.py     # links, tables, encoding, index coverage, version pins
 python tools/check_vendor.py   # vendored contract digests
+gofmt -l .                     # must print nothing
+go vet ./...
+go build ./...
+go test ./...
+go build -o /tmp/context-ci ./cmd/context-ci && bash tools/smoke_quickstart.sh /tmp/context-ci
 ```
 
-Both must pass. CI runs exactly these two commands.
+All must pass. CI runs these commands — the Go ones on Linux, Windows and macOS — and also runs
+`action.yml` from the checkout against [`examples/minimal`](examples/minimal). The last line is the
+README quickstart, executed: change the quickstart and the script together.
 
 ## What needs an ADR first
 

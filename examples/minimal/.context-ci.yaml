@@ -1,0 +1,26 @@
+# The smallest project context-ci can gate: one prompt file and a declared model.
+#
+# Everything under `model` is a declaration, not a measurement. context-ci hashes the files named
+# under capture.sources and copies the values below into the manifest beside those hashes; it does
+# not watch the application, so it cannot know that these are the values the application sends.
+
+version: 1
+
+capture:
+  path: asserted
+  sources:
+    prompt: prompts/support.md
+
+model:
+  provider: openai          # openai | anthropic | google | other
+  id: gpt-x                 # a placeholder: write the model this project calls
+  params:
+    temperature: "0"
+    max_tokens: 1024
+
+gate:
+  # A prompt edit is a `warn` by default, and the default gate fails only on `fail`. This example
+  # fails on a warning as well, so that editing prompts/support.md without regenerating
+  # context-manifest.json turns the check red. Use `fail` to let prompt edits through with a
+  # warning and block only changes such as a different model.
+  fail_on: warn

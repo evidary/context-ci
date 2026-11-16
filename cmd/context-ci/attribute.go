@@ -11,11 +11,11 @@ import (
 	"github.com/evidary/context-ci/internal/diff"
 )
 
-// attributeCommand implements the fourth verb: given two manifests and two eval runs, say which
-// context change the movement points at, and say plainly when it cannot.
+// attributeCommand implements the fourth verb: given two manifests and two eval runs, list the
+// context changes the movement is consistent with, and say plainly when it cannot. It names
+// candidates; it does not establish a cause.
 func attributeCommand(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("attribute", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var (
 		configPath = fs.String("config", "", "configuration file (default "+config.DefaultFile+")")
 		root       = fs.String("root", ".", "repository root")
@@ -25,11 +25,13 @@ func attributeCommand(args []string, stdout, stderr io.Writer) int {
 		results    = fs.String("results", "", "eval results for the head (required)")
 		format     = fs.String("format", "text", "text, github or json")
 	)
-	if err := fs.Parse(args); err != nil {
-		return ExitUsage
+	positional, code, ok := parseArgs(fs, "context-ci attribute --baseline <base.json> --baseline-results <file> --results <file> [flags]",
+		args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "attribute: unexpected argument %q\n", fs.Arg(0))
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "attribute: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 	for name, value := range map[string]string{
@@ -111,6 +113,9 @@ func printAttribution(w io.Writer, report attribute.Report) {
 		return
 	}
 	fmt.Fprintf(w, "\nchanged classes: %s\n", report.ClassNames())
+	if caveat := report.Caveat(); caveat != "" {
+		fmt.Fprintln(w, caveat)
+	}
 	if len(report.Implicated) > 0 {
 		fmt.Fprintln(w, "")
 		for _, implication := range report.Implicated {

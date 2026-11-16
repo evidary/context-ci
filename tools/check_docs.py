@@ -7,6 +7,7 @@ Fails the build on:
   3. a file that is not valid UTF-8, has a BOM, or contains mojibake
   4. a markdown file under docs/ that is not referenced from docs/00-index.md
   5. a contract schema whose checksum does not match CHECKSUMS.txt (when present)
+  6. an install or `uses:` pin in a document that names a version other than VERSION
 
 No third-party dependencies. Run from the repository root:
     python tools/check_docs.py
@@ -426,6 +427,32 @@ def check_version_matches_changelog():
         )
 
 
+PIN = re.compile(r"evidary/context-ci(?:/cmd/context-ci)?@v(\d+\.\d+\.\d+)")
+
+
+def check_version_pins(md_files):
+    """Every install or `uses:` pin in the documents must name the version in VERSION.
+
+    The README told a reader to use `@v0.6.0` while VERSION said 0.7.1, and two CI snippets
+    installed `@v0.4.2`. A pin is a copy of VERSION, so it goes stale the same way the
+    changelog heading does. The changelog itself is exempt: its pins are history.
+    """
+    version_path = os.path.join(ROOT, "VERSION")
+    if not os.path.exists(version_path):
+        return
+    version = open(version_path, encoding="utf-8").read().strip()
+    for path in md_files:
+        if rel(path) == "CHANGELOG.md":
+            continue
+        for number, line in enumerate(open(path, encoding="utf-8"), 1):
+            for pinned in PIN.findall(line):
+                if pinned != version:
+                    errors.append(
+                        "%s:%d: pins context-ci v%s but VERSION says %s"
+                        % (rel(path), number, pinned, version)
+                    )
+
+
 def main():
     md_files = []
     total = 0
@@ -441,6 +468,7 @@ def main():
             check_tables(path, text)
     check_index_coverage(md_files)
     check_version_matches_changelog()
+    check_version_pins(md_files)
     check_contracts()
 
     print("checked %d files, %d markdown" % (total, len(md_files)))

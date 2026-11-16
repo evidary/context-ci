@@ -60,9 +60,14 @@ func TestInitWritesAConfigTheOtherVerbsAccept(t *testing.T) {
 		t.Fatalf("the generated configuration did not reach the tools source:\n%s", raw)
 	}
 
+	// check builds its head from the same checkout, so against a baseline written a moment ago
+	// it has to find nothing - and has to say so about a manifest it built, not one it re-read.
 	var checkOut, checkErr bytes.Buffer
-	if code := run([]string{"check", "--root", root, "--baseline", head, "--head", head}, &checkOut, &checkErr); code != ExitOK {
+	if code := run([]string{"check", "--root", root, "--baseline", head, "--commit", "9c1f2ab"}, &checkOut, &checkErr); code != ExitOK {
 		t.Fatalf("check exit = %d, want %d with the generated configuration: %s", code, ExitOK, checkErr.String())
+	}
+	if !strings.Contains(checkOut.String(), "no change in context") {
+		t.Fatalf("check found a change in a checkout nobody edited:\n%s", checkOut.String())
 	}
 }
 
@@ -287,7 +292,7 @@ func TestInitWithoutAPromptSaysWhichFileToCreate(t *testing.T) {
 	write(t, root, defaultPrompt, "You are a support agent.\n")
 	head := manifestFor(t, root, "head.json")
 	errOut.Reset()
-	if code := run([]string{"check", "--root", root, "--baseline", head, "--head", head}, &stdout, &errOut); code != ExitOK {
+	if code := run([]string{"check", "--root", root, "--baseline", head, "--commit", "9c1f2ab"}, &stdout, &errOut); code != ExitOK {
 		t.Fatalf("check exit = %d, want %d after creating the file init named: %s", code, ExitOK, errOut.String())
 	}
 }
@@ -319,7 +324,7 @@ func TestInitWritesWhereItIsTold(t *testing.T) {
 		t.Fatalf("manifest exit = %d with the generated configuration: %s", code, errOut.String())
 	}
 	errOut.Reset()
-	if code := run([]string{"check", "--root", root, "--config", target, "--baseline", head, "--head", head}, &out, &errOut); code != ExitOK {
+	if code := run([]string{"check", "--root", root, "--config", target, "--baseline", head, "--commit", "9c1f2ab"}, &out, &errOut); code != ExitOK {
 		t.Fatalf("check exit = %d with the generated configuration: %s", code, errOut.String())
 	}
 }

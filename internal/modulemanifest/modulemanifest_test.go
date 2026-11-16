@@ -103,13 +103,26 @@ func TestTheHealthPathIsTheOneWeServe(t *testing.T) {
 		t.Fatal(err)
 	}
 	if built.HealthPath != "/healthz" {
-		t.Fatalf("health_path = %q, but `review-router serve` answers /healthz", built.HealthPath)
+		t.Fatalf("health_path = %q, but `context-ci serve` answers /healthz", built.HealthPath)
 	}
 	if built.ContractsPublished == nil {
 		t.Fatal("contracts_published is null; the contract types it as an array, and null is not an array")
 	}
 	if built.ContractsConsumed == nil || len(built.ContractsConsumed) == 0 {
 		t.Fatal("contracts_consumed is empty, and the contract requires at least one")
+	}
+}
+
+// TestTheEntitlementsNameOnlyWhatTheBinaryDoes pins the list. `cost.attribute` was advertised with no cost
+// attribution behind it, and an entitlement is a name a platform may bill or route on. Adding one here has to
+// be a decision that comes with the verb it names.
+func TestTheEntitlementsNameOnlyWhatTheBinaryDoes(t *testing.T) {
+	built, err := Build("0.4.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if joined(built.Entitlements) != `["context.check"]` {
+		t.Fatalf("entitlements = %v, want only context.check: nothing else is implemented", built.Entitlements)
 	}
 }
 

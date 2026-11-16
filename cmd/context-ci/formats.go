@@ -69,6 +69,10 @@ func writeSARIF(w io.Writer, r *diff.Result, toolVersion string) error {
 	run.Tool.Driver.Name = "context-ci"
 	run.Tool.Driver.Version = toolVersion
 	run.Tool.Driver.InformationURI = "https://github.com/evidary/context-ci"
+	// Empty, not nil: a nil slice marshals as `null`, and the SARIF schema types both as arrays.
+	// A diff with no change is the common case for a gate, and it must still be a valid report.
+	run.Tool.Driver.Rules = []rule{}
+	run.Results = []result{}
 
 	seen := map[diff.Class]bool{}
 	for _, entry := range r.Entries {
@@ -190,11 +194,15 @@ func writeJUnit(w io.Writer, r *diff.Result) error {
 // neither records where it lives; a location here would be invented, and an annotation pointing at
 // an unrelated line is worse than one pointing at nothing.
 func writeGitHubAttribution(w io.Writer, report attribute.Report) {
-	fmt.Fprintf(w, "::notice title=%s::%s\n",
-		escapeProperty("context-ci attribute"),
-		escapeData(fmt.Sprintf("%s: %s: %d compared, %d regressed, %d improved, %d unchanged, %d incomparable",
-			report.Suite, report.Mode, report.Compared, report.Regressed, report.Improved,
-			report.Unchanged, report.Incomparable)))
+	summary := fmt.Sprintf("%s: %s: %d compared, %d regressed, %d improved, %d unchanged, %d incomparable",
+		report.Suite, report.Mode, report.Compared, report.Regressed, report.Improved,
+		report.Unchanged, report.Incomparable)
+	// The confounding statement rides on the summary, which is the one annotation a reader sees
+	// before the findings: an error-level class below it must not be read as a proven cause.
+	if caveat := report.Caveat(); caveat != "" {
+		summary += ". " + caveat
+	}
+	fmt.Fprintf(w, "::notice title=%s::%s\n", escapeProperty("context-ci attribute"), escapeData(summary))
 
 	for _, implicated := range report.Implicated {
 		level, message := "notice", implicated.Summary

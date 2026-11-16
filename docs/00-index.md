@@ -2,7 +2,7 @@
 
 **This file routes every question to exactly one document in this repository.** Context CI is a standalone product; nothing needed to build, sell or support it lives outside this repository except the vendored contracts, which are copied in.
 
-**Repo:** `context-ci` · **Version:** 0.7.0 (pre-release; the CLI is implemented, the build starts 17 Nov 2026) · **Last updated:** 29 October 2026
+**Repo:** `context-ci` · **Version:** 0.7.1 (pre-release; the CLI is implemented, the build starts 17 Nov 2026) · **Last updated:** 16 November 2026
 
 ---
 
@@ -17,6 +17,7 @@
 | What exactly we build, in scope and out | [03-product/spec.md](03-product/spec.md) |
 | The manifest format | [03-product/spec.md](03-product/spec.md) §4 |
 | Every flag, exit code and configuration key | [03-product/cli-reference.md](03-product/cli-reference.md) |
+| A working project to copy | [../examples/minimal](../examples/minimal/.context-ci.yaml) — one prompt, one configuration, the manifest they produce |
 | What happens in the first 30 days | [04-plan/30-day-launch.md](04-plan/30-day-launch.md) |
 | What happens in weeks 5–15 | [04-plan/module-plan.md](04-plan/module-plan.md) |
 | When we decide to charge money | [04-plan/module-plan.md](04-plan/module-plan.md) §10 and §14 |

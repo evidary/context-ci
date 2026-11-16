@@ -1,6 +1,6 @@
 # CLI reference
 
-**Version:** 1.0.0 · **Date:** 15 November 2026 · **Owner:** Context CI squad
+**Version:** 1.0.0 · **Date:** 16 November 2026 · **Owner:** Context CI squad
 
 The four verbs in [the specification](spec.md) §1. All four are implemented, and this page is the
 contract for them. The rest of this page also covers the verbs that serve them — `init`,
@@ -11,47 +11,81 @@ contract for them. The rest of this page also covers the verbs that serve them �
 ## 1. Install and first run
 
 ```bash
-context-ci init              # writes a commented .context-ci.yaml, refusing to overwrite one
-context-ci manifest          # writes context-manifest.json for this checkout
+context-ci init                                     # writes a commented .context-ci.yaml, refusing to overwrite one
+context-ci manifest --out context-manifest.json     # the baseline: commit it
+context-ci check --baseline context-manifest.json   # the baseline against the working tree, right now
 ```
 
 That is the whole quickstart. No account, no network call, no secret. `init` is optional: a
-configuration written by hand, as in §4, is read exactly the same way.
+configuration written by hand, as in §4, is read exactly the same way. [`examples/minimal`](../../examples/minimal)
+is a project in this shape, with its manifest committed, and `tools/smoke_quickstart.sh` runs these
+commands end to end in CI.
+
+Three things a first run meets, each reported as one line that says what to do:
+
+| Situation | What the tool says | Exit |
+|---|---|---:|
+| `init` found no prompt file | names `prompts/support.md` as the path it wrote and the file to create | 0 |
+| `manifest` or `check`, and a configured source file is missing | `capture.sources.<kind> names <path>, which does not exist under <root>: create that file, or point capture.sources.<kind> at the file that holds it` | 3 |
+| `manifest` or `check` with no commit to record — not a git repository, no commits yet, or no git | says which of the three it is, and `run this inside a git repository that has at least one commit, or pass --commit <id>` | 2 |
+
+The missing file is reported first, before git is asked for anything.
+
+**The manifest is declared, not observed.** `manifest` hashes the files named under `capture.sources`
+and copies `model`, `retrieval` and `policy` from the configuration. It does not inspect a running
+application, so the model id, the parameters, the retrieval settings and the policy version in a
+manifest are what the configuration asserts. `--capture` replaces one field — the rendered prompt
+hash — with the hash of text an SDK recorded at request-assembly time; see [`manifest`](#manifest).
 
 In a pull request:
 
 ```yaml
 - uses: actions/checkout@v4
-  with: { fetch-depth: 0 }
+  with: { fetch-depth: 0 }      # the baseline is read from the base branch
 - uses: actions/setup-go@v5
   with: { go-version: "1.27" }
-- uses: evidary/context-ci/action@v0.6.0
+- name: Baseline from the base branch
+  env:
+    BASE_REF: ${{ github.base_ref }}
+  run: git show "origin/${BASE_REF}:context-manifest.json" > "${RUNNER_TEMP}/context-manifest.base.json"
+- uses: evidary/context-ci@v0.7.1
   with:
-    baseline: context-manifest.base.json
-    format: github      # annotations on the diff
+    baseline: ${{ runner.temp }}/context-manifest.base.json
+    format: github      # annotations on the pull request
 ```
 
-The action builds the binary from its own checkout, so what runs is the code the ref names and no
-release asset has to exist. `check` without a baseline fails rather than passing on an empty
-comparison.
+`action.yml` is at the repository root, so the action is `evidary/context-ci@<ref>`; there is no
+`action/` subdirectory. The action builds the binary from its own checkout, so what runs is the
+code the ref names and no release asset has to exist. It uses the Go toolchain on the runner and
+installs the version its own `go.mod` names when the runner has none; the `setup-go` step above
+pins the version instead of leaving it to the runner image.
+
+The action passes no head manifest to `check` unless the `head` input is set, so the head is built
+from the pull request's checkout on every run. `check` without a baseline fails rather than passing
+on an empty comparison, and a baseline that is also named as the head is refused.
 
 ## 2. The verbs
 
 | Verb | Command | What it does |
 |---|---|---|
 | Scaffold | `context-ci init` | Writes a commented `.context-ci.yaml` for the current checkout |
-| Capture | `context-ci manifest` | Writes `context-manifest.json` for the current checkout |
+| Capture | `context-ci manifest` | Writes the manifest for the current checkout — to stdout, or to `--out` |
 | Compare | `context-ci diff <base> <head>` | Semantic diff between two manifests |
-| Gate | `context-ci check` | Diffs against a baseline and exits non-zero above the threshold |
+| Gate | `context-ci check` | Diffs a baseline against the working tree and exits non-zero above the threshold |
 | Explain | `context-ci classes` | Lists every diff class and its default severity |
-| Attribute | `context-ci attribute` | Says which context class moved, when the cases declare what they depend on |
+| Attribute | `context-ci attribute` | Lists the changed context classes a regression is consistent with, when the regressed cases declare what they depend on |
 | Discover | `context-ci module-manifest` | The platform's `module-manifest.v1.json`. Deliberately **not** `manifest`, which already means the tool manifest above |
 | Probe | `context-ci serve` | `GET /healthz` and `GET /readyz`, so the manifest's `health_path` is real |
 | Version | `context-ci version` | Prints the tool version, including the module version the toolchain stamped into a `go install`ed binary |
 
 `attribute` was the last of the four specification verbs to land, because it needed the eval
-results format settled first; `init` came after it. It still refuses to guess: with no
-`depends_on` declarations it reports a correlation and says so. See [`attribute`](#attribute).
+results format settled first; `init` came after it. It still refuses to guess: when no regressed
+case declares `depends_on` it reports a correlation and says so. See [`attribute`](#attribute).
+
+**Flags may be written before or after a verb's arguments.** `context-ci diff a.json b.json --format
+sarif` and `context-ci diff --format sarif a.json b.json` are the same command, and a bare `--` ends
+the flags for a file whose name starts with a dash. `context-ci <verb> -h` prints that verb's flags
+on stdout and exits 0.
 
 ### `init`
 
@@ -120,9 +154,17 @@ the manifest records types, because it is a file teams commit and share.
 With no `--out`, the manifest goes to stdout and a one-line summary goes to stderr,
 so `context-ci manifest > context-manifest.json` behaves.
 
-`--commit` defaults to `git rev-parse HEAD`. If git cannot answer, the command
-fails rather than inventing a value: a manifest with no commit cannot be
-reproduced, which makes it useless as evidence.
+`--commit` defaults to git's `HEAD`. If git cannot answer, the command fails with exit 2 rather
+than inventing a value: a manifest with no commit cannot be reproduced, which makes it useless as
+evidence. The message says which case it is — the directory is not a git repository, the
+repository has no commits yet, or git is not installed — and that `--commit <id>` supplies the
+value by hand. Every configured source is checked first, so a missing prompt file is reported
+before the commit is.
+
+What the manifest holds is what the configuration declares. The hashes are computed from the files
+named under `capture.sources`; `model.provider`, `model.id`, `model.params`, `retrieval.*` and
+`policy.version` are copied from `.context-ci.yaml` unchanged. Nothing here contacts a provider or
+reads a request, so a manifest cannot show that the application uses the model it names.
 
 ### `diff`
 
@@ -131,18 +173,50 @@ context-ci diff <base.json> <head.json> [--format text|github|json|sarif|junit] 
 ```
 
 Needs no configuration file. Comparing two manifests should never require setup, so
-severity overrides are optional here.
+severity overrides are optional here. The flags work in either position.
+
+Both files are read strictly. A manifest is rejected with exit 3 when its digest does not match
+its content, when it holds a field the schema does not define — an unknown field is outside the
+digest, so it would be content nothing verified — or when a restricted value in
+[spec.md](spec.md) §4 is outside what is allowed: a `model.provider` that is not `openai`,
+`anthropic`, `google` or `other`, a sampling value that is not a number, a negative `top_k`,
+`max_tokens` or `description_tokens`, or a hash that is not 64 lowercase hex characters. `check`
+and `attribute` read manifests the same way.
 
 ### `check`
 
 ```bash
-context-ci check --baseline <base.json> [--head context-manifest.json] \
+context-ci check --baseline <base.json> [--root .] [--commit <sha>] [--head <head.json>] \
                  [--config .context-ci.yaml] [--format text|github|json|sarif|junit]
 ```
 
 `--baseline` is required. Without a baseline there is nothing to compare, and a
 gate that silently passes because it had nothing to do is the most dangerous
 possible default.
+
+**The head is built from the working tree.** With no `--head`, `check` builds a manifest from the
+checkout at `--root` — the same one `manifest` would write, in memory — and compares the baseline
+with that. A line on stderr says so and gives its digest; stdout is only the report. The commit it
+records is git's `HEAD`, or `--commit`, exactly as for `manifest`.
+
+| Flag | Default | Behaviour |
+|---|---|---|
+| `--baseline` | none, required | The manifest to compare against: a committed file, or one read from the base branch |
+| `--head` | built from the working tree | Read this manifest instead of building one. For a head produced elsewhere, such as an instrumented manifest written with `manifest --capture` |
+| `--commit` | git `HEAD` | The commit recorded in a head `check` builds. Combining it with `--head` is a usage error, because that manifest already records one |
+| `--root` | `.` | The checkout the head is built from, and where `.context-ci.yaml` is found |
+
+**One file as both sides is a usage error.** `check --baseline m.json --head m.json` exits 2,
+whichever way the two paths are spelled: a file compared with itself can only report that nothing
+changed. `check` used to default `--head` to `context-manifest.json`, which is also the file the
+quickstart named as the baseline, so the documented gate printed "no change" and exited 0 after
+any edit.
+
+**What fails the build.** `check` exits 1 for a change at or above `gate.fail_on`, which defaults
+to `fail`. A prompt edit is `warn` by default, so with the default gate it is reported and the exit
+code is 0; set `gate.fail_on: warn`, or `severity: {prompt.template_hash: fail}`, to make it block.
+When the configuration names no `rendered` source the rendered hash is the template hash, and the
+edit is reported once, as `prompt.template_hash`.
 
 ### `classes`
 
@@ -161,9 +235,9 @@ Exit codes are part of the contract, so a pipeline can script them.
 
 | Code | Meaning |
 |---:|---|
-| 0 | Nothing changed, or nothing at or above the threshold |
+| 0 | Nothing changed, or nothing at or above the threshold. Also `-h`: asking for help is not an error |
 | 1 | **The gate failed**: at least one change at or above `gate.fail_on` |
-| 2 | Usage or configuration error |
+| 2 | Usage or configuration error, including `check` given one file as both baseline and head, and no commit to record |
 | 3 | A manifest could not be read, or is invalid. `module-manifest` also uses it for a build with no released identity, and `serve` for a server that failed after it started: neither is a usage error, and both mean the document the tool was asked for could not be produced |
 
 A configuration error is 2, never 1, so a pipeline can tell "the code is fine but
@@ -229,6 +303,11 @@ gate:
   believing a gate exists.
 - **`capture.sources.prompt` is required.** A manifest with no prompt hash proves
   nothing.
+- **`model.provider` is required and is one of `openai`, `anthropic`, `google`, `other`.** The
+  set is the one [spec.md](spec.md) §4 lists; `OpenAI` and `openai` would otherwise be two
+  providers and a `model.provider` change between them.
+- **`retrieval.top_k` and `model.params.max_tokens` cannot be negative**, and a sampling value
+  must be a number: `temperature` and `top_p` a decimal, `seed` an integer.
 - **Source paths must stay inside the repository.** `../secrets.env` is refused.
 - **`capture.path: instrumented` and `observed` are refused by the CLI** with a
   message naming what produces them. Only the SDK and a recorded sample can, and
@@ -265,6 +344,10 @@ property of the context.
 
 ## 6. What the manifest does not contain
 
+- **No observation of the running application.** Every value is a hash of a file in the
+  repository or a value copied from `.context-ci.yaml`. The one exception is `prompt.rendered_hash`
+  in a manifest written with `--capture`, which is the hash of text an SDK recorded. A manifest
+  therefore says what a team declared, and `capture.path` says which of the two it is.
 - **No prompt text.** The manifest schema carries an optional `content` field for a copy a
   team opted into, and it is checked against its hash on load, but no verb writes one: the
   prompt reaches the manifest as a hash and nothing else.
@@ -285,7 +368,7 @@ property of the context.
 | `text` (default) | A human reading a log |
 | `github` | Workflow commands, so the entry appears on the pull request |
 | `json` | Scripting and the next tool |
-| `sarif` | Code scanning: each change becomes a result on the pull request's file |
+| `sarif` | A SARIF 2.1.0 report: one rule per changed class and one result per change. The results carry no `locations` — see below |
 | `junit` | A test report, for dashboards that only read XML |
 
 `github` escapes `%`, `\r` and `\n` in every message, and additionally `:` and `,` in the
@@ -315,11 +398,27 @@ SARIF output is deterministic: the same diff renders byte-identically twice, so 
 or diffed. Every result names a rule that the run declares, because a SARIF consumer drops a result
 whose rule is missing.
 
+**A SARIF result has no location.** A manifest records hashes and declared values, not the file
+and line that produced them, so a result carries a rule, a level, a message and the before and
+after values, and no `locations`. A viewer that places findings on a file has nowhere to put them;
+this page used to say each change "becomes a result on the pull request's file", and it does not.
+For something visible on the pull request use `--format github`, whose annotations are attached to
+the run rather than to a line.
+
+**A diff with no change is a complete report.** `rules` and `results` are empty arrays, and the
+JUnit suite is an empty `<testsuite tests="0" ...>`. Until 16 November 2026 the SARIF for an
+unchanged context carried `"rules": null, "results": null`, which the schema rejects.
+
 Both formats were validated against their published schemas on 13 November 2026: SARIF 2.1.0
 against the OASIS `sarif-schema-2.1.0.json`, and JUnit against the `junit-10.xsd` the Jenkins xunit
 plugin ships, with a diff containing one `fail`, one `warn` and one `ignore` entry. That last part
 matters: `errors` is a required attribute on `testsuite` in that schema, so it is written as `0` —
-a change is never a report that failed to be produced.
+a change is never a report that failed to be produced. That validation did not include a diff with
+no entries, which is how the `null` above went unnoticed. On 16 November 2026 the SARIF for an
+unchanged context and for a two-change diff were validated against the OASIS
+`sarif-schema-2.1.0.json` with Python `jsonschema`: both pass, and the unchanged report with `null`
+in place of its two arrays fails on exactly `rules` and `results`. JUnit was not re-validated
+against the XSD; its empty suite is pinned by a test.
 
 ---
 
@@ -331,33 +430,71 @@ context-ci attribute --baseline base.json --head context-manifest.json \
                      [--format text|github|json]
 ```
 
-Two manifests and two eval runs. It reports what moved, and — when the cases say what they depend
-on — which context class the movement points at.
+Two manifests and two eval runs. It reports what moved, and — when the regressed cases say what
+they depend on — which changed context classes that movement is consistent with. **It lists
+candidate causes. It does not establish a cause.** A `depends_on` declaration is the suite
+author's statement about a case, not a measurement, and two eval runs cannot separate two changes
+made together.
 
 ```json
 {"version": 1, "suite": "support-quality", "cases": [
-  {"id": "q1", "score": 0.92, "depends_on": ["prompt.rendered_hash"]},
+  {"id": "q1", "score": 0.92, "depends_on": ["prompt.template_hash"]},
   {"id": "q3", "score": 0.90, "depends_on": ["model.id"]}
 ]}
 ```
 
+A results file is read strictly, and refused with exit 3 when it would be misread: a `version`
+other than `1`, an unknown field, a case with no `id` or a repeated one, a `score` outside 0..1,
+or a `depends_on` entry that is not a context class — `context-ci classes` prints the list. A
+misspelled class could never match a change, so it would silently remove the case from every
+attribution. Only `score` and `passed` are compared; `cost_usd` is accepted and not used, so
+nothing here attributes cost.
+
 **The distinction the verb exists to keep is attribution versus correlation.**
 
-| The cases declare `depends_on` | What the report says |
+| The regressed cases declare `depends_on` | What the report says |
 |---|---|
-| Yes | `attribution`: a regressed case that depends on one of the changed classes implicates it, with a share over all regressed cases |
-| No | `correlation`: the scores moved and the configuration moved, and nothing ties them together |
+| At least one does | `attribution`: a regressed case that depends on one of the changed classes makes that class a candidate, with a share over all regressed cases |
+| None does | `correlation`: the scores moved and the configuration moved, and nothing ties them together |
+
+The mode is decided by the cases that regressed. A declaration on a case that did not regress is
+not evidence about the ones that did.
 
 ```
-prompt.rendered_hash      3 of 3 regressed cases (100%)  the rendered prompt changed
+support-quality: 3 compared, 3 regressed, 0 improved, 0 unchanged, 0 incomparable
+3 of 3 cases regressed and every regressed case declares its dependencies; 3 of them declare a
+dependency on a class that changed, so the classes below are candidate causes consistent with those
+declarations, not proven causes.
+
+changed classes: model.id, prompt.template_hash
+2 context classes changed together, so their effects are confounded: this report is not causal, and
+it cannot say which of those changes, if any, caused a movement in the scores.
+
+  prompt.template_hash     3 of 3 regressed cases (100%)  the prompt template changed
+  model.id                 0 of 3 regressed cases (0%)  the model changed
 ```
+
+(Each sentence is one line in the output; it is wrapped here.) The second paragraph is requirement
+C-08: it is printed whenever more than one class changed, in every mode, and the JSON report
+carries the same fact as `"confounded": true`.
 
 The same numbers with the declarations removed:
 
 ```
-3 of 4 cases regressed, but no case declares which context classes it depends on, so this is a
-correlation: the scores moved and the configuration moved, and nothing here ties them together.
+3 of 3 cases regressed, but no regressed case declares which context classes it depends on, so this
+is a correlation: the scores moved and the configuration moved, and nothing here ties them together
+beyond that.
 ```
+
+Every sentence is computed from the counts it states. The other things the first line can say:
+
+| Situation | Sentence |
+|---|---|
+| Some regressed cases declare and some do not | `2 of the 3 regressed cases declare dependencies` in place of `every regressed case declares its dependencies` |
+| The regressed cases declare, but not a class that changed | `none of them declares a dependency on a class that changed, so no changed class is a candidate cause on this evidence` |
+| Cases regressed and no class changed | `no context class changed between the two manifests, so nothing in the context is a candidate cause` |
+| Nothing regressed and something improved | `No case regressed by more than 0.001 (2 improved), so there is no regression to attribute.` |
+| Nothing moved | `No case moved by more than 0.001, so there is nothing to attribute.` |
 
 Three rules worth knowing:
 
@@ -367,6 +504,10 @@ Three rules worth knowing:
   result, and dropping it would quietly shrink the denominator.
 - **A class that changed with no evidence against it is printed with zero**, not omitted. Silence
   would read as innocence.
+
+One thing that surprises: with no `rendered` source in the configuration, a prompt edit is the
+class `prompt.template_hash`, and `prompt.rendered_hash` is reported as unchanged. A case that
+should follow prompt edits in that setup declares `prompt.template_hash`.
 
 `attribute` never exits non-zero for a regression: gating is `check`'s job, and a verb that
 reports and fails at once cannot be used to explain a build that already failed.
@@ -382,10 +523,14 @@ only in the job log:
 ::warning title=context-ci attribute case q1::regressed by more than 0.001
 ```
 
+When more than one class changed, the summary notice ends with the confounding statement — `... 0
+incomparable. 2 context classes changed together, so their effects are confounded: ...` — so the
+first annotation a reader sees qualifies the ones below it.
+
 | Annotation | Level | Why that level |
 |---|---|---|
 | The summary: suite, mode and the five counts | `notice` | It is the qualifier, not a finding, and it must be readable before the rest |
-| A class that a regressed case declares a dependency on | `error` | Evidence ties a regression to this change |
+| A class that a regressed case declares a dependency on | `error` | A declaration ties a regression to this change: a candidate cause, not a proven one |
 | A regressed case | `warning` | The score moved; the case name is what a reader needs to go and look |
 | A changed class that nothing points at | `notice` | It changed. Printing it with zero beats silence that reads as innocence |
 
@@ -402,7 +547,7 @@ In a workflow, run the verb as its own step rather than capturing its output, be
 are read from the step's log:
 
 ```yaml
-- uses: evidary/context-ci/action@v0.6.0
+- uses: evidary/context-ci@v0.7.1
   with:
     command: attribute
     baseline: context-manifest.base.json
@@ -420,7 +565,9 @@ truncated list cannot make a report look empty.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| CI-provider verification | Every snippet's commands are exercised locally, verbatim; none has run on a hosted runner, and no outsider can install at all while the repository is private. Measured and dated in [spec.md](spec.md) §7, with a launch-day item in the [launch plan](../04-plan/30-day-launch.md) | Launch day |
+| CI-provider verification | Every snippet's commands are exercised locally; none has run on a hosted runner, and no outsider can install at all while the repository is private. That includes this repository's own `.github/workflows/ci.yml`, whose Linux, macOS and Windows jobs have not yet run. Measured and dated in [spec.md](spec.md) §7, with a launch-day item in the [launch plan](../04-plan/30-day-launch.md) | Launch day |
+| Observed capture of anything but the prompt | The manifest's model, parameters, retrieval settings and policy version are declared in `.context-ci.yaml`. No code reads them from a running application, so a change made outside the repository is not seen | Not scheduled |
+| Cost attribution | `attribute` compares `score` and `passed`. An eval case's `cost_usd` is accepted and unused, and no cost event is emitted | Not scheduled |
 | Prompts from a registry | **Undecided, so not built.** [spec.md](spec.md) §12 question 2 asks whether registries are a source at v0.1 or only files, and the repository records no answer. What a source would need is listed below, and requirement C-02 forbids the network call it would make | After v0.1 |
 
 ### Why prompts from a registry are still deferred

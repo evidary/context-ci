@@ -4,6 +4,91 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ---
 
+## [Unreleased]
+
+**The gate could not fail, and now it can.** An audit on 16 November 2026 ran the built binary
+against the README and found that the documented quickstart compared a manifest with itself. This
+entry is that defect and the ten found beside it. None of it is in the `v0.7.1` tag: the documents
+pin `v0.7.1` because `VERSION` says so, and `tools/check_docs.py` now fails when a pin and `VERSION`
+disagree, so the pins move with the release that carries these fixes.
+
+### Fixed
+
+- **`check` compared the baseline with itself.** The README set `baseline: context-manifest.json`,
+  `--head` defaulted to the same file, and the action wrote a head only when none existed — so an
+  edited prompt printed "no change" and exited 0. `check` now builds its head from the working tree
+  unless `--head` names one, takes `--commit` for that head the way `manifest` does, and refuses one
+  file as both sides with exit 2, however the two paths are spelled. The action passes no head to
+  `check` and its `head` input defaults to empty. `TestCheckGatesAnEditMadeAfterTheBaseline` writes a
+  baseline, edits the prompt and requires exit 1.
+- **`uses: evidary/context-ci/action@v0.6.0` could not resolve.** `action.yml` is at the repository
+  root and there has never been an `action/` directory. The documents now say
+  `evidary/context-ci@v0.7.1`, decision D-05 records the correction, and the README's workflow is a
+  whole one: a checkout with history, a Go toolchain, the baseline read from the base branch, then
+  the action. The action installs Go itself when the runner has none.
+- **A flag after a positional was not parsed.** `context-ci diff a.json b.json --format sarif` — the
+  order the CLI reference documents — failed with "need a base and a head manifest", because the
+  flag package stops at the first positional. Every verb now accepts its flags in either position.
+- **SARIF for an unchanged context was not SARIF.** `rules` and `results` were `null`, which the
+  schema rejects, on the one report a green build always writes. They are empty arrays. The CLI
+  reference claimed each change "becomes a result on the pull request's file"; a result has no
+  location, and the page now says so.
+- **`attribute` printed sentences that were not true.** "Every one of them declared dependencies"
+  appeared when no regressed case declared any, because the mode was decided by whether *any* case
+  declared one; "no case moved" appeared when cases had improved. Every sentence is now computed
+  from the counts it states, the mode is decided by the cases that regressed, and the wording is
+  "candidate causes consistent with those declarations, not proven causes" — the specification's §6
+  rule 3. When more than one class changed the report says they are confounded (requirement C-08),
+  in the text, in the summary annotation and as `"confounded": true`.
+- **`attribute` accepted results it would misread**: `"version": 99`, and a `depends_on` naming a
+  class that does not exist, which could never match a change. Both are refused with exit 3.
+- **A manifest could carry content nothing verified.** An unknown field was dropped before the
+  digest was recomputed, so a file with an injected key reported "no change" and exit 0. Manifests
+  are now decoded strictly, and the restricted values in the specification's §4 are enforced:
+  `model.provider` is one of four, sampling values are numbers, and `top_k`, `max_tokens` and
+  `description_tokens` are not negative. The configuration refuses the same values, so
+  `model.provider` is now required there.
+- **`-h` on a verb exited 2.** Asking for help is not a usage error: it prints the verb's flags on
+  stdout and exits 0.
+- **A first run failed three times without saying what to do.** In an empty directory `manifest`
+  reported git's own "not a git repository", then "unknown revision", then a path error from the
+  operating system. A missing source is now reported first, by its configuration key; a missing
+  commit says whether there is no repository, no commit or no git, and that `--commit` supplies one.
+- **The module manifest advertised `cost.attribute`.** Nothing attributes cost: `attribute` reads
+  `score` and `passed`, and `cost_usd` is accepted and unused. The entitlement is removed, and the
+  comments there that named `review-router serve` name this binary.
+- **This file had the `[0.7.1]` entry five times**, once above each older release. One remains.
+
+### Changed
+
+- **The documents say the manifest is declared.** The README described a record of the context a
+  feature "ran with". At this version a manifest is hashes of files in the repository and the model,
+  parameters, retrieval settings and policy version written in `.context-ci.yaml`; only the rendered
+  prompt can be observed, through an SDK capture. README, specification and CLI reference now say
+  that, and say what it means: a change made outside the repository is not seen.
+- The README and the document index said 0.7.0 while `VERSION` said 0.7.1.
+- The specification's GitLab and CircleCI snippets pinned `v0.4.2` and a Go 1.23 image for a module
+  whose `go.mod` requires 1.27. They pin `v0.7.1` and Go 1.27, and the page says these two edits
+  have not been re-run.
+- A stray code fence in the specification's §4 rendered everything from "Rules" to §7 as code.
+
+### Added
+
+- **CI builds and tests the code.** `.github/workflows/ci.yml` ran two documentation checks and
+  nothing else. It now runs `gofmt`, `go vet`, `go build` and `go test` on Linux, Windows and macOS
+  with the Go version `go.mod` names, runs the README quickstart end to end
+  (`tools/smoke_quickstart.sh`: a baseline, an edited prompt, exit 1), and runs `action.yml` from
+  the checkout against the example project.
+- **`examples/minimal`** — one prompt, one configuration and the manifest they produce, which the
+  README's quick start runs. A test fails when the committed manifest stops matching the
+  files beside it.
+
+### Not done
+
+None of the workflow has run on a GitHub-hosted runner: not the new CI jobs, not the action's
+`setup-go` fallback, not the README's workflow. Everything a shell can run locally was run locally
+on this date — the tests, the quickstart script, and the action's own steps extracted from
+`action.yml`. The gap stays recorded in [docs/03-product/spec.md](docs/03-product/spec.md) §7.
 
 ## [0.7.1] — 2026-11-16
 
@@ -14,6 +99,7 @@ behaviour it describes. What follows in this entry is the code defects the audit
 which were fixed rather than documented.
 
 ## [0.7.0] — 2026-11-15
+
 ### Added
 
 - **`context-ci init`** — writes a commented `.context-ci.yaml` for the current checkout. Both
@@ -54,15 +140,6 @@ which were fixed rather than documented.
 
 ---
 
-
-## [0.7.1] — 2026-11-16
-
-**Documentation accuracy pass.** Every "planned", "not implemented" and "does not exist" claim
-was checked against the tree; every verb, flag and exit code in the docs against the
-dispatcher; every number re-derived or de-quantified; and every code comment read for the
-behaviour it describes. What follows in this entry is the code defects the audit found,
-which were fixed rather than documented.
-
 ## [0.6.1] — 2026-11-15
 
 **`--help` now names every verb it accepts.** `attribute`, `module-manifest`, `serve` and `version` were all
@@ -77,15 +154,6 @@ rests on — had been invisible there since it shipped in 0.6.0.
   so the help screen cannot go stale by hand again. Verified by deleting a line and watching it fail.
 
 ---
-
-
-## [0.7.1] — 2026-11-16
-
-**Documentation accuracy pass.** Every "planned", "not implemented" and "does not exist" claim
-was checked against the tree; every verb, flag and exit code in the docs against the
-dispatcher; every number re-derived or de-quantified; and every code comment read for the
-behaviour it describes. What follows in this entry is the code defects the audit found,
-which were fixed rather than documented.
 
 ## [0.6.0] — 2026-11-15
 
@@ -133,15 +201,6 @@ recorded in [docs/03-product/spec.md](docs/03-product/spec.md) §7.
 - The package is `internal/modulemanifest`, since `internal/manifest` here already means the context manifest.
 
 ---
-
-
-## [0.7.1] — 2026-11-16
-
-**Documentation accuracy pass.** Every "planned", "not implemented" and "does not exist" claim
-was checked against the tree; every verb, flag and exit code in the docs against the
-dispatcher; every number re-derived or de-quantified; and every code comment read for the
-behaviour it describes. What follows in this entry is the code defects the audit found,
-which were fixed rather than documented.
 
 ## [0.4.2] — 2026-11-13
 
@@ -346,15 +405,6 @@ a source, and the two capture SDKs. Listed in
 [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) §8.
 
 ---
-
-
-## [0.7.1] — 2026-11-16
-
-**Documentation accuracy pass.** Every "planned", "not implemented" and "does not exist" claim
-was checked against the tree; every verb, flag and exit code in the docs against the
-dispatcher; every number re-derived or de-quantified; and every code comment read for the
-behaviour it describes. What follows in this entry is the code defects the audit found,
-which were fixed rather than documented.
 
 ## [1.0.0-docs] — 2026-10-29
 

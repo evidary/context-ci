@@ -1,9 +1,12 @@
-name: docs
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   check-docs:
@@ -27,3 +30,65 @@ jobs:
           python-version: "3.12"
       - name: Verify vendored contract digests
         run: python tools/check_vendor.py
+
+  # Requirement C-09: the tool runs on Linux, macOS and Windows runners. The Go version is the
+  # one go.mod names, so the toolchain CI uses cannot drift from the one the module declares.
+  go:
+    name: gofmt, vet, build, test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "these files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go build
+        run: go build ./...
+      - name: go test
+        run: go test ./...
+
+  # The README quickstart, executed: a baseline is committed, the prompt is edited, and check
+  # has to exit 1. The script is the one a contributor runs locally.
+  smoke:
+    name: the README quickstart gates an edited prompt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the binary
+        run: go build -trimpath -o "$RUNNER_TEMP/context-ci" ./cmd/context-ci
+      - name: Run the quickstart
+        run: bash tools/smoke_quickstart.sh "$RUNNER_TEMP/context-ci"
+
+  # The composite action itself, from this checkout, against the example project: it has to build
+  # the binary, build a head from the working tree and find it equal to the committed manifest.
+  action:
+    name: action.yml runs against examples/minimal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: ./
+        with:
+          command: check
+          root: examples/minimal
+          baseline: examples/minimal/context-manifest.json
+          format: github

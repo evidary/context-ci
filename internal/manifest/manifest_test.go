@@ -252,3 +252,63 @@ func TestValidateAcceptsSample(t *testing.T) {
 		t.Fatalf("Validate() rejected the sample: %v", err)
 	}
 }
+
+// TestValidateEnforcesTheRestrictedValues covers the table in the specification's §4. Each of
+// these used to validate, hash and diff like any other value.
+func TestValidateEnforcesTheRestrictedValues(t *testing.T) {
+	cases := map[string]struct {
+		mutate func(m *Manifest)
+		want   string
+	}{
+		"a provider outside the enum":  {func(m *Manifest) { m.Model.Provider = "OpenAI" }, "model.provider"},
+		"no provider":                  {func(m *Manifest) { m.Model.Provider = "" }, "model.provider"},
+		"a temperature that is a word": {func(m *Manifest) { m.Model.Params.Temperature = ptr("hot") }, "model.params.temperature"},
+		"an empty top_p":               {func(m *Manifest) { m.Model.Params.TopP = ptr("") }, "model.params.top_p"},
+		"a fractional seed":            {func(m *Manifest) { m.Model.Params.Seed = ptr("4.2") }, "model.params.seed"},
+		"a negative max_tokens":        {func(m *Manifest) { m.Model.Params.MaxTokens = ptrInt(-1) }, "model.params.max_tokens"},
+		"a negative top_k":             {func(m *Manifest) { m.Retrieval.TopK = -1 }, "retrieval.top_k"},
+		"a short filters_hash":         {func(m *Manifest) { m.Retrieval.FiltersHash = ptr("abc") }, "retrieval.filters_hash"},
+		"an uppercase guardrails_hash": {func(m *Manifest) { m.Policy.GuardrailsHash = ptr(strings.Repeat("A", 64)) }, "policy.guardrails_hash"},
+		"a short rendered_sample_hash": {func(m *Manifest) { m.Prompt.RenderedSampleHash = ptr("abc") }, "prompt.rendered_sample_hash"},
+		"a negative description_tokens": {func(m *Manifest) {
+			if len(m.Tools) == 0 {
+				t.Fatal("the sample manifest has no tool to mutate")
+			}
+			m.Tools[0].DescriptionTokens = -3
+		}, "description_tokens"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			m := sample()
+			tc.mutate(m)
+			err := m.Validate()
+			if err == nil {
+				t.Fatal("Validate() accepted it")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("the error does not name %s: %v", tc.want, err)
+			}
+		})
+	}
+
+	// And the values the specification does allow still pass.
+	for _, provider := range Providers {
+		m := sample()
+		m.Model.Provider = provider
+		if err := m.Validate(); err != nil {
+			t.Fatalf("provider %q was refused: %v", provider, err)
+		}
+	}
+	for _, literal := range []string{"0", "0.0", "0.70", "1e-1", ".5", "-1"} {
+		m := sample()
+		m.Model.Params.Temperature = ptr(literal)
+		if err := m.Validate(); err != nil {
+			t.Fatalf("temperature %q was refused: %v", literal, err)
+		}
+	}
+	zero := sample()
+	zero.Retrieval.TopK = 0
+	if err := zero.Validate(); err != nil {
+		t.Fatalf("top_k 0 was refused, and a configuration with no retrieval block records exactly that: %v", err)
+	}
+}

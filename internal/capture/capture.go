@@ -67,10 +67,10 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 	}
 
 	hashes := make(map[string]string, len(cfg.Capture.Sources))
-	for kind, rel := range cfg.Capture.Sources {
-		sum, err := hashFile(root, rel)
+	for _, kind := range sourceKinds(cfg) {
+		sum, err := hashFile(root, cfg.Capture.Sources[kind])
 		if err != nil {
-			return nil, fmt.Errorf("capture: source %s: %w", kind, err)
+			return nil, sourceError(kind, cfg.Capture.Sources[kind], root, err)
 		}
 		hashes[kind] = sum
 	}
@@ -156,6 +156,53 @@ func Build(cfg *config.Config, root string, opts Options) (*manifest.Manifest, e
 	return m, nil
 }
 
+// CheckSources reports the first configured source that cannot be read, without building anything.
+// It lets a caller say "this file is missing" before it asks for anything else a manifest needs,
+// so a first run reports the file the user has to create rather than whatever happened to be
+// checked first.
+func CheckSources(cfg *config.Config, root string) error {
+	if cfg == nil {
+		return errors.New("capture: no configuration")
+	}
+	for _, kind := range sourceKinds(cfg) {
+		if _, err := readInsideRoot(root, cfg.Capture.Sources[kind]); err != nil {
+			return sourceError(kind, cfg.Capture.Sources[kind], root, err)
+		}
+	}
+	return nil
+}
+
+// sourceKinds returns the configured source kinds in a fixed order, so that when two sources are
+// unreadable the one reported does not depend on map iteration.
+func sourceKinds(cfg *config.Config) []string {
+	kinds := make([]string, 0, len(cfg.Capture.Sources))
+	for kind := range cfg.Capture.Sources {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	return kinds
+}
+
+// ErrMissingSource is returned for a source path with no file behind it. It is a type of its own
+// because it is the commonest first-run failure and the only one whose fix is "create the file":
+// the operating system's wording for it differs by platform and names no configuration key.
+type ErrMissingSource struct{ Path string }
+
+func (e ErrMissingSource) Error() string {
+	return fmt.Sprintf("capture: %s does not exist", e.Path)
+}
+
+// sourceError names the configuration key as well as the path, because the key is what the reader
+// has to edit when the path is wrong.
+func sourceError(kind, rel, root string, err error) error {
+	var missing ErrMissingSource
+	if errors.As(err, &missing) {
+		return fmt.Errorf("capture: capture.sources.%s names %s, which does not exist under %s: "+
+			"create that file, or point capture.sources.%s at the file that holds it", kind, rel, root, kind)
+	}
+	return fmt.Errorf("capture: source %s: %w", kind, err)
+}
+
 // hashFile hashes a file's content with line endings normalised to LF.
 func hashFile(root, rel string) (string, error) {
 	data, err := readInsideRoot(root, rel)
@@ -221,7 +268,7 @@ func readInsideRoot(root, rel string) ([]byte, error) {
 				"capture: %s exists but cannot be resolved to a real path (%v); a symlink or junction is refused because it cannot be shown to stay inside %s",
 				rel, err, root)
 		}
-		return nil, fmt.Errorf("capture: %s does not exist: %w", rel, err)
+		return nil, ErrMissingSource{Path: rel}
 	}
 	if realTarget != realRoot && !strings.HasPrefix(realTarget, realRoot+string(filepath.Separator)) {
 		return nil, ErrOutsideRoot{Path: rel}

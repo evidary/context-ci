@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,29 @@ const (
 	CaptureInstrumented = "instrumented"
 	CaptureAsserted     = "asserted"
 	CaptureObserved     = "observed"
+)
+
+// Providers are the values model.provider may take, as the specification's §4 lists them. The set
+// is closed so that "OpenAI", "openai " and "open-ai" cannot be three providers in three manifests
+// and a model.provider change between two of them; "other" is the documented escape.
+var Providers = []string{"openai", "anthropic", "google", "other"}
+
+// IsProvider reports whether name is one of Providers.
+func IsProvider(name string) bool {
+	for _, p := range Providers {
+		if name == p {
+			return true
+		}
+	}
+	return false
+}
+
+// decimalPattern and integerPattern are what a sampling value may look like. An exponent is
+// accepted because a configuration may write one and the literal text is what is hashed; a word,
+// an empty string and NaN are not numbers under any spelling.
+var (
+	decimalPattern = regexp.MustCompile(`^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$`)
+	integerPattern = regexp.MustCompile(`^-?\d+$`)
 )
 
 // ErrFloat is returned when a value that is not an integer reaches the
@@ -214,6 +238,45 @@ func (m *Manifest) Validate() error {
 	if m.Model.ID == "" {
 		return errors.New("manifest: model.id is required")
 	}
+	if !IsProvider(m.Model.Provider) {
+		return fmt.Errorf("manifest: model.provider %q is not one of %s", m.Model.Provider, strings.Join(Providers, ", "))
+	}
+	// Sampling values are strings so that they never depend on float formatting, which only helps
+	// if the string is a number: "hot" would hash, diff and gate like any other value.
+	for _, p := range []struct {
+		what    string
+		value   *string
+		pattern *regexp.Regexp
+		want    string
+	}{
+		{"model.params.temperature", m.Model.Params.Temperature, decimalPattern, "a decimal number"},
+		{"model.params.top_p", m.Model.Params.TopP, decimalPattern, "a decimal number"},
+		{"model.params.seed", m.Model.Params.Seed, integerPattern, "an integer"},
+	} {
+		if p.value != nil && !p.pattern.MatchString(*p.value) {
+			return fmt.Errorf("manifest: %s is %q, want %s written as a string", p.what, *p.value, p.want)
+		}
+	}
+	// A count below zero is not a setting anyone chose; it is a corrupted or hand-edited file, and
+	// a diff of it would report a change between two values neither of which can be run.
+	if m.Model.Params.MaxTokens != nil && *m.Model.Params.MaxTokens < 0 {
+		return fmt.Errorf("manifest: model.params.max_tokens is %d and cannot be negative", *m.Model.Params.MaxTokens)
+	}
+	if m.Retrieval.TopK < 0 {
+		return fmt.Errorf("manifest: retrieval.top_k is %d and cannot be negative", m.Retrieval.TopK)
+	}
+	for _, h := range []struct {
+		what  string
+		value *string
+	}{
+		{"prompt.rendered_sample_hash", m.Prompt.RenderedSampleHash},
+		{"retrieval.filters_hash", m.Retrieval.FiltersHash},
+		{"policy.guardrails_hash", m.Policy.GuardrailsHash},
+	} {
+		if h.value != nil && !isSHA256Hex(*h.value) {
+			return fmt.Errorf("manifest: %s is not 64 hex characters", h.what)
+		}
+	}
 	if m.Prompt.TemplateHash == "" || m.Prompt.RenderedHash == "" {
 		return errors.New("manifest: prompt.template_hash and prompt.rendered_hash are required")
 	}
@@ -239,6 +302,9 @@ func (m *Manifest) Validate() error {
 		seen[t.Name] = true
 		if !isSHA256Hex(t.SchemaHash) {
 			return fmt.Errorf("manifest: tool %q schema_hash is not 64 hex characters", t.Name)
+		}
+		if t.DescriptionTokens < 0 {
+			return fmt.Errorf("manifest: tool %q description_tokens is %d and cannot be negative", t.Name, t.DescriptionTokens)
 		}
 	}
 	// A tool's description steers the model as much as its schema does, and the only

@@ -16,13 +16,17 @@ import (
 // runModuleManifest prints this module's module-manifest.v1.json.
 //
 // It is deliberately not called `manifest`. This product already has a `manifest` verb, and it means something
-// else: the *tool* manifest that says which checks this binary offers. Two documents with one name would be a
+// else: the context manifest, context-manifest.json, for a checkout. Two documents with one name would be a
 // trap for whoever scripts against it, so the platform's discovery document gets the name of the contract it
 // emits — and that name is the same in every module of the portfolio.
 func runModuleManifest(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("module-manifest", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	positional, code, ok := parseArgs(fs, "context-ci module-manifest", args, stdout, stderr)
+	if !ok {
+		return code
+	}
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "module-manifest: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 	built, err := modulemanifest.Build(version)
@@ -48,9 +52,13 @@ func runModuleManifest(args []string, stdout, stderr io.Writer) int {
 // not the product being unhealthy.
 func runServe(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	addr := fs.String("addr", "127.0.0.1:8099", "address to listen on")
-	if err := fs.Parse(args); err != nil {
+	positional, code, ok := parseArgs(fs, "context-ci serve [flags]", args, stdout, stderr)
+	if !ok {
+		return code
+	}
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "serve: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 

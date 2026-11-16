@@ -1,12 +1,16 @@
-// Package attribute ties a movement in eval results to the context change that plausibly
-// caused it.
+// Package attribute lists the context changes a movement in eval results is consistent with.
 //
 // The distinction this package exists to keep is attribution versus correlation. A case that
-// declares which context classes it depends on can be attributed to: if it regressed and only
-// one of its dependencies changed, that dependency is implicated by evidence. A case that
-// declares nothing can only be correlated: the score moved and the configuration moved, and
-// nothing ties them together beyond the fact that both happened. A tool that printed the second
-// as if it were the first would be inventing the answer this product exists to give.
+// declares which context classes it depends on can be attributed to: if it regressed and one of
+// its declared dependencies changed, that class is a candidate cause, named by the declaration
+// rather than by coincidence. A case that declares nothing can only be correlated: the score
+// moved and the configuration moved, and nothing ties them together beyond the fact that both
+// happened. A tool that printed the second as if it were the first would be inventing the answer
+// this product exists to give.
+//
+// Neither is a causal claim. A declaration is the suite author's statement of what a case depends
+// on, not a measurement, and when two classes changed together nothing here can separate them.
+// The report says "consistent with", never "caused by", and says so in the output.
 package attribute
 
 import (
@@ -17,7 +21,12 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/evidary/context-ci/internal/diff"
 )
+
+// Version is the eval results schema version this package accepts.
+const Version = 1
 
 // Threshold is how much a score must move to count. Floats from a model do not repeat exactly,
 // and a report that calls a 1e-12 wobble a regression trains its reader to ignore it.
@@ -56,6 +65,11 @@ func Load(path string) (Results, error) {
 	if err := decoder.Decode(&results); err != nil {
 		return Results{}, fmt.Errorf("attribute: %s: %w", path, err)
 	}
+	// A version this reader does not know may mean a different score scale or a different meaning
+	// for depends_on, and reading it as version 1 would report on a file it misunderstood.
+	if results.Version != Version {
+		return Results{}, fmt.Errorf("attribute: %s: version %d is not supported, want %d", path, results.Version, Version)
+	}
 	if len(results.Cases) == 0 {
 		return Results{}, fmt.Errorf("attribute: %s: no cases", path)
 	}
@@ -70,6 +84,15 @@ func Load(path string) (Results, error) {
 		seen[c.ID] = true
 		if c.Score != nil && (*c.Score < 0 || *c.Score > 1) {
 			return Results{}, fmt.Errorf("attribute: %s: case %q has score %v, want 0..1", path, c.ID, *c.Score)
+		}
+		// A dependency on a class that does not exist can never match a change, so a misspelled
+		// name would quietly remove the case from every attribution while still counting it as
+		// one that declared its dependencies.
+		for _, dependency := range c.DependsOn {
+			if !diff.IsKnownClass(dependency) {
+				return Results{}, fmt.Errorf("attribute: %s: case %q depends_on %q, which is not a context class; "+
+					"run 'context-ci classes' for the list", path, c.ID, dependency)
+			}
 		}
 	}
 	return results, nil
@@ -109,8 +132,17 @@ type Report struct {
 	// Incomparable is cases missing from one run, or measured differently in each. They are
 	// counted rather than dropped: a vanished case is a result too.
 	Incomparable int `json:"incomparable"`
-	// Undeclared is how many cases declare no dependencies.
+	// Undeclared is how many compared cases declare no dependencies.
 	Undeclared int `json:"undeclared"`
+	// RegressedDeclared is how many regressed cases declare at least one dependency, and
+	// RegressedPointing how many of those name a class that changed. The sentences the report
+	// prints are built from these two, because "the cases declare dependencies" is only a reason
+	// to believe an attribution when the cases that regressed are the ones that declared.
+	RegressedDeclared int `json:"regressed_declared"`
+	RegressedPointing int `json:"regressed_pointing"`
+	// Confounded is true when more than one class changed. Their effects cannot be separated by
+	// two eval runs, so every class listed is a candidate and none is shown to be the cause.
+	Confounded bool `json:"confounded"`
 	// Implicated is one entry per changed class, ordered by share then name.
 	Implicated []Implication `json:"implicated,omitempty"`
 	// Regressions names the cases that got worse, so a reader can go and look.
@@ -156,10 +188,21 @@ func Attribute(base, head Results, changes []ClassChange) Report {
 		case delta < -Threshold:
 			report.Regressed++
 			report.Regressions = append(report.Regressions, headCase.ID)
+			if len(headCase.DependsOn) > 0 {
+				report.RegressedDeclared++
+			}
+			pointing := false
+			counted := map[string]bool{}
 			for _, dependency := range headCase.DependsOn {
-				if changed[dependency] {
+				// A dependency written twice is still one case pointing at one class.
+				if changed[dependency] && !counted[dependency] {
+					counted[dependency] = true
 					implicated[dependency]++
+					pointing = true
 				}
+			}
+			if pointing {
+				report.RegressedPointing++
 			}
 		case delta > Threshold:
 			report.Improved++
@@ -176,15 +219,19 @@ func Attribute(base, head Results, changes []ClassChange) Report {
 		}
 	}
 	report.Undeclared = report.Compared - declared
+	report.Confounded = len(report.Changed) > 1
 	sort.Strings(report.Regressions)
 	sort.Strings(report.Improvements)
 
+	// The mode is decided by the cases that regressed. It used to be decided by whether any
+	// compared case declared a dependency, so one unchanged case with a declaration turned a
+	// run in which no regressed case declared anything into an "attribution".
 	switch {
 	case report.Compared == 0:
 		report.Mode = ModeNoChange
 	case report.Regressed == 0:
 		report.Mode = ModeNoChange
-	case declared == 0:
+	case report.RegressedDeclared == 0:
 		report.Mode = ModeCorrelation
 	default:
 		report.Mode = ModeAttribution
@@ -251,19 +298,54 @@ func index(cases []Case) map[string]Case {
 	return out
 }
 
-// Explain renders the one sentence a reader needs to know what the numbers mean.
+// Explain renders the sentence a reader needs to know what the numbers mean. Every clause is
+// computed from the counts it states, so it cannot say "every one of them declared dependencies"
+// about a run in which none did.
 func (r Report) Explain() string {
 	switch r.Mode {
 	case ModeAttribution:
-		return fmt.Sprintf("%d of %d cases regressed, and every one of them declared dependencies, so the classes below are implicated by evidence rather than by coincidence.", r.Regressed, r.Compared)
+		head := fmt.Sprintf("%d of %d cases regressed", r.Regressed, r.Compared)
+		declared := fmt.Sprintf("%d of the %d regressed cases declare dependencies", r.RegressedDeclared, r.Regressed)
+		if r.RegressedDeclared == r.Regressed {
+			declared = "every regressed case declares its dependencies"
+		}
+		switch {
+		case len(r.Changed) == 0:
+			return fmt.Sprintf("%s and %s, but no context class changed between the two manifests, "+
+				"so nothing in the context is a candidate cause.", head, declared)
+		case r.RegressedPointing == 0:
+			return fmt.Sprintf("%s and %s, but none of them declares a dependency on a class that changed, "+
+				"so no changed class is a candidate cause on this evidence.", head, declared)
+		default:
+			return fmt.Sprintf("%s and %s; %d of them declare a dependency on a class that changed, so the classes "+
+				"below are candidate causes consistent with those declarations, not proven causes.",
+				head, declared, r.RegressedPointing)
+		}
 	case ModeCorrelation:
-		return fmt.Sprintf("%d of %d cases regressed, but no case declares which context classes it depends on, so this is a correlation: the scores moved and the configuration moved, and nothing here ties them together beyond that.", r.Regressed, r.Compared)
+		return fmt.Sprintf("%d of %d cases regressed, but no regressed case declares which context classes it depends on, "+
+			"so this is a correlation: the scores moved and the configuration moved, and nothing here ties them together beyond that.",
+			r.Regressed, r.Compared)
 	default:
 		if r.Compared == 0 {
 			return "The two runs share no case with a comparable measure, so nothing can be attributed."
 		}
+		if r.Improved > 0 {
+			return fmt.Sprintf("No case regressed by more than %.3f (%d improved), so there is no regression to attribute.",
+				Threshold, r.Improved)
+		}
 		return fmt.Sprintf("No case moved by more than %.3f, so there is nothing to attribute.", Threshold)
 	}
+}
+
+// Caveat is the confounding statement, or "" when at most one class changed. It is separate from
+// Explain because it is true in every mode: two changes made together cannot be told apart by
+// two eval runs, whatever the cases declare.
+func (r Report) Caveat() string {
+	if !r.Confounded {
+		return ""
+	}
+	return fmt.Sprintf("%d context classes changed together, so their effects are confounded: this report is not causal, "+
+		"and it cannot say which of those changes, if any, caused a movement in the scores.", len(r.Changed))
 }
 
 // ClassNames returns the changed classes as a comma-separated list, for a one-line summary.

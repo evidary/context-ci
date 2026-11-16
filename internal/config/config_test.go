@@ -14,6 +14,7 @@ capture:
   sources:
     prompt: prompts/support.md
 model:
+  provider: openai
   id: gpt-x
 `
 
@@ -95,61 +96,82 @@ func TestValidationRejects(t *testing.T) {
 		"wrong version": `
 version: 2
 capture: {path: asserted, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 `,
 		"instrumented without an sdk": `
 version: 1
 capture: {path: instrumented, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 `,
 		"no sources": `
 version: 1
 capture: {path: asserted, sources: {}}
-model: {id: m}
+model: {provider: openai, id: m}
 `,
 		"no prompt source": `
 version: 1
 capture: {path: asserted, sources: {tools: t.yaml}}
-model: {id: m}
+model: {provider: openai, id: m}
 `,
 		"unknown source key": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md, promt: typo.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 `,
 		"no model id": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
 model: {provider: openai}
 `,
-		"unknown severity class": `
+		"no model provider": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
 model: {id: m}
+`,
+		"a provider outside the documented set": `
+version: 1
+capture: {path: asserted, sources: {prompt: p.md}}
+model: {provider: OpenAI, id: m}
+`,
+		"negative top_k": `
+version: 1
+capture: {path: asserted, sources: {prompt: p.md}}
+model: {provider: openai, id: m}
+retrieval: {top_k: -1}
+`,
+		"negative max_tokens": `
+version: 1
+capture: {path: asserted, sources: {prompt: p.md}}
+model: {provider: openai, id: m, params: {max_tokens: -5}}
+`,
+		"unknown severity class": `
+version: 1
+capture: {path: asserted, sources: {prompt: p.md}}
+model: {provider: openai, id: m}
 severity: {model.ed: fail}
 `,
 		"bad severity value": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 severity: {model.id: block}
 `,
 		"bad fail_on": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 gate: {fail_on: sometimes}
 `,
 		"negative calls": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 gate: {calls_per_day: -1}
 `,
 		"unknown top level field": `
 version: 1
 capture: {path: asserted, sources: {prompt: p.md}}
-model: {id: m}
+model: {provider: openai, id: m}
 gat: {fail_on: never}
 `,
 	}

@@ -77,17 +77,17 @@ var promptProbes = []string{
 // team does not use.
 func runInit(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	var (
 		root       = fs.String("root", ".", "repository root the configuration describes")
 		configPath = fs.String("config", "", "where to write it (default "+config.DefaultFile+" under --root)")
 		force      = fs.Bool("force", false, "replace a configuration file that already exists")
 	)
-	if err := fs.Parse(args); err != nil {
-		return ExitUsage
+	positional, code, ok := parseArgs(fs, "context-ci init [flags]", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "init: unexpected argument %q\n", fs.Arg(0))
+	if len(positional) != 0 {
+		fmt.Fprintf(stderr, "init: unexpected argument %q\n", positional[0])
 		return ExitUsage
 	}
 

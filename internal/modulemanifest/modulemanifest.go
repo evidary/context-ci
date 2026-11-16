@@ -1,11 +1,11 @@
-// Package manifest emits acp-core `module-manifest.v1.json`: what a platform needs in order to discover this
+// Package modulemanifest emits acp-core `module-manifest.v1.json`: what a platform needs in order to discover this
 // module, check its health and know which contracts it speaks.
 //
 // The contract requires `health_path`, and it requires it for a good reason — the control plane probes
 // modules the same way it probes itself. That requirement is what kept this file from existing: the product
 // is a command-line tool, so it had no endpoint to name, and writing `/healthz` into a manifest without
 // serving one would be a claim that a probe against it succeeds. The answer was not to weaken the contract
-// or to fake the field, but to serve the endpoint (`review-router serve`), which is why `manifest` and
+// or to fake the field, but to serve the endpoint (`context-ci serve`), which is why `module-manifest` and
 // `serve` arrived together.
 package modulemanifest
 
@@ -33,11 +33,11 @@ const Licence = "Apache-2.0"
 // Repository is where the source lives.
 const Repository = "https://github.com/evidary/context-ci"
 
-// HealthPath is served by `review-router serve` and is the value this manifest declares.
+// HealthPath is served by `context-ci serve` and is the value this manifest declares.
 const HealthPath = "/healthz"
 
-// ReadyPath reports whether the store can be read, separately from liveness, so a store outage does not
-// look like a dead process — the same split the platform applies to itself.
+// ReadyPath is the readiness probe, kept separate from liveness because the platform applies that split to
+// itself. This module has no store to wait for, so `context-ci serve` answers it with `stateless: true`.
 const ReadyPath = "/readyz"
 
 // semver is the form the contract accepts for a version. It has no room for a pre-release or a build
@@ -81,7 +81,12 @@ var published = []versioned{}
 
 // entitlements are the capabilities this module provides to a platform. They are names, not enforcements:
 // the platform decides who holds them, and nothing in this repository authenticates them yet.
-var entitlements = []string{"context.check", "cost.attribute"}
+//
+// The list is what the binary does and nothing else. It used to advertise `cost.attribute` as well, and no
+// verb attributes cost: `attribute` compares eval scores and pass/fail, the `cost_usd` field of an eval case
+// is read and never used, and no cost-event is emitted. An entitlement is a name a platform may bill or
+// route on, so one with nothing behind it is a claim, not a placeholder.
+var entitlements = []string{"context.check"}
 
 // Build renders the manifest for a released version.
 //

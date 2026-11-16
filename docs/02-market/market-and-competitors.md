@@ -200,7 +200,7 @@ No published figure exists for "context manifest tooling". Any number presented 
 
 **Swarmia** — Engineering effectiveness with modular pricing. Price: Standard $45/developer/month, Enterprise $55/developer/month billed annually; individual modules: AI adoption and cost $5, developer surveys $9, software capitalisation $18, productivity and AI impact $23; free for companies up to 9 developers [59]. Strength: module pricing makes the "AI cost" line easy to add to an existing contract. Gap: dashboards about adoption and cost, no per-change attribution.
 
-**Sleuth** — Has pivoted to distributing AI assets: Skills and MCP servers synchronised to Claude Code, Codex, Cursor, Gemini CLI, Copilot and others through a CLI [60]. Price: not public. Strength: this is the most interesting adjacent move in the set — it is *config distribution*, one half of "version control the inputs". Gap: it distributes configuration to developers' machines; it does not record what a deployed feature actually ran with, and it has no diff or gate.
+**Sleuth** — Has pivoted to distributing AI assets: Skills and MCP servers synchronised to Claude Code, Codex, Cursor, Gemini CLI, Copilot and others through a CLI [60]. Price: not public. Strength: this is the most interesting adjacent move in the set — it is *config distribution*, one half of "version control the inputs". Gap: it distributes configuration to developers' machines; it does not keep a per-commit record of the context a feature is configured with, and it has no diff or gate.
 
 ---
 

@@ -9,20 +9,23 @@ branding:
 # binary, and a container would add a pull to every job that uses it. With no version input the
 # binary is built from this action's own checkout, so the ref a workflow names and the code that
 # runs are the same commit — and no release asset has to exist for the action to work.
+#
+# This file is at the repository root, so a workflow names it as `evidary/context-ci@<ref>`. There
+# is no `action/` subdirectory: `evidary/context-ci/action@<ref>` does not resolve.
 
 inputs:
   command:
-    description: "manifest writes a manifest; check compares two of them and fails the job above the threshold; attribute says which context class the movement in two eval runs points at."
+    description: "manifest writes a manifest; check compares the baseline with the working tree and fails the job above the threshold; attribute lists the changed context classes a movement in two eval runs is consistent with."
     required: false
     default: check
   baseline:
-    description: "Path to the baseline manifest. Required for check and attribute: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is."
+    description: "Path to the baseline manifest. Required for check and attribute: without one there is nothing to compare, and a gate that passes because it had nothing to do is the worst default there is. For a pull request it should be the manifest committed on the base branch."
     required: false
     default: ""
   head:
-    description: "Path to the head manifest. Defaults to context-manifest.json, which this action writes for check when the file does not exist. attribute never writes it: an attribution is about the manifest the eval ran against, and generating one would silently attribute to whatever is on disk."
+    description: "Path to a head manifest. Leave it empty for check: the head is then built from the working tree on every run, so a stale or identical file can never stand in for it, and naming the baseline here is refused. manifest writes to this path, and attribute reads it; both use context-manifest.json when it is empty. attribute never builds one: an attribution is about the manifest the eval ran against."
     required: false
-    default: context-manifest.json
+    default: ""
   baseline-results:
     description: "Path to the baseline eval results. Required for attribute, which needs both runs to say what moved."
     required: false
@@ -50,12 +53,32 @@ inputs:
 
 outputs:
   manifest:
-    description: "The manifest path that was written or used."
+    description: "The manifest path that manifest wrote, or the head that check or attribute read. Empty when check built its head from the working tree, because that head is not written anywhere."
     value: ${{ steps.run.outputs.manifest }}
 
 runs:
   using: composite
   steps:
+    # The binary is built from source, so a Go toolchain is needed. A runner that has one keeps it
+    # untouched; a runner that has none gets the version this action's own go.mod names, so the
+    # action works without a setup-go step in the calling workflow.
+    - name: Look for a Go toolchain
+      id: toolchain
+      shell: bash
+      run: |
+        if command -v go >/dev/null 2>&1; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Install Go, because the runner has none
+      if: ${{ steps.toolchain.outputs.found != 'true' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: false
+
     - name: Get context-ci
       id: get
       shell: bash
@@ -64,7 +87,7 @@ runs:
       run: |
         set -euo pipefail
         if ! command -v go >/dev/null 2>&1; then
-          echo "::error::this action needs a Go toolchain to build context-ci; add actions/setup-go before it"
+          echo "::error::this action needs a Go toolchain to build context-ci and could not install one; add actions/setup-go before it"
           exit 1
         fi
         if [ -n "$INPUT_VERSION" ]; then
@@ -82,17 +105,6 @@ runs:
         fi
         echo "$bin" >> "$GITHUB_PATH"
         "${bin}/context-ci$(go env GOEXE)" version
-
-    - name: Write the head manifest when it is missing
-      if: ${{ inputs.command == 'check' && inputs.head != '' }}
-      shell: bash
-      env:
-        INPUT_HEAD: ${{ inputs.head }}
-      run: |
-        set -euo pipefail
-        [ -e "$INPUT_HEAD" ] && exit 0
-        echo "no $INPUT_HEAD: writing one for this checkout"
-        context-ci manifest --out "$INPUT_HEAD"
 
     - name: Run
       id: run
@@ -113,16 +125,23 @@ runs:
         if [ -n "$INPUT_CONFIG" ]; then shared+=(--config "$INPUT_CONFIG"); fi
         case "$INPUT_COMMAND" in
           manifest)
-            context-ci manifest --out "$INPUT_HEAD" ${shared[@]+"${shared[@]}"}
-            echo "manifest=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
+            out="${INPUT_HEAD:-context-manifest.json}"
+            context-ci manifest --out "$out" ${shared[@]+"${shared[@]}"}
+            echo "manifest=${out}" >> "$GITHUB_OUTPUT"
             ;;
           check)
             if [ -z "$INPUT_BASELINE" ]; then
               echo "::error::check needs a baseline manifest: pass the baseline input"
               exit 1
             fi
+            # With no head input the binary builds the head from the working tree, which is the
+            # point of the gate. This step used to write context-manifest.json only when it was
+            # missing and then compare against it, so a committed manifest named as the baseline
+            # was compared with itself and the job passed whatever the pull request changed.
+            head=()
+            if [ -n "$INPUT_HEAD" ]; then head=(--head "$INPUT_HEAD"); fi
             echo "manifest=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
-            context-ci check --baseline "$INPUT_BASELINE" --head "$INPUT_HEAD" \
+            context-ci check --baseline "$INPUT_BASELINE" ${head[@]+"${head[@]}"} \
               --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
             ;;
           attribute)
@@ -130,7 +149,9 @@ runs:
               echo "::error::attribute needs baseline, baseline-results and results; without all three there is nothing to attribute"
               exit 1
             fi
-            context-ci attribute --baseline "$INPUT_BASELINE" --head "$INPUT_HEAD" \
+            head="${INPUT_HEAD:-context-manifest.json}"
+            echo "manifest=${head}" >> "$GITHUB_OUTPUT"
+            context-ci attribute --baseline "$INPUT_BASELINE" --head "$head" \
               --baseline-results "$INPUT_BASELINE_RESULTS" --results "$INPUT_RESULTS" \
               --format "$INPUT_FORMAT" ${shared[@]+"${shared[@]}"}
             ;;
