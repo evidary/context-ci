@@ -3,8 +3,7 @@
 **Status on 16 November 2026:** version 0.8.0, pre-release. The repository is private.
 **Public launch target:** 16 December 2026.
 
-The original plans are kept for history in [docs/04-plan/](docs/04-plan/30-day-launch.md). This page is
-what is true now.
+This page is what is true now.
 
 ---
 

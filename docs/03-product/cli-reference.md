@@ -565,7 +565,7 @@ truncated list cannot make a report look empty.
 
 | Gap | Why it is a gap | Planned |
 |---|---|---|
-| CI-provider verification | Every snippet's commands are exercised locally; none has run on a hosted runner, and no outsider can install at all while the repository is private. That includes this repository's own `.github/workflows/ci.yml`, whose Linux, macOS and Windows jobs have not yet run. Measured and dated in [spec.md](spec.md) §7, with a launch-day item in the [launch plan](../04-plan/30-day-launch.md) | Launch day |
+| CI-provider verification | Every snippet's commands are exercised locally; none has run on a hosted runner, and no outsider can install at all while the repository is private. That includes this repository's own `.github/workflows/ci.yml`, whose Linux, macOS and Windows jobs have not yet run. Measured and dated in [spec.md](spec.md) §7 | Launch day |
 | Observed capture of anything but the prompt | The manifest's model, parameters, retrieval settings and policy version are declared in `.context-ci.yaml`. No code reads them from a running application, so a change made outside the repository is not seen | Not scheduled |
 | Cost attribution | `attribute` compares `score` and `passed`. An eval case's `cost_usd` is accepted and unused, and no cost event is emitted | Not scheduled |
 | Prompts from a registry | **Undecided, so not built.** [spec.md](spec.md) §12 question 2 asks whether registries are a source at v0.1 or only files, and the repository records no answer. What a source would need is listed below, and requirement C-02 forbids the network call it would make | After v0.1 |

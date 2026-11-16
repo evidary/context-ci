@@ -57,6 +57,5 @@ That arrangement fails this product specifically, for reasons that do not apply 
 
 ## References
 
-- [../01-thesis.md](../01-thesis.md)
 - [../05-contracts/README.md](../05-contracts/README.md)
 - The platform repository's own decision record on keeping separate repositories (not public)

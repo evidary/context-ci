@@ -7,7 +7,7 @@
 ## Before you start
 
 - Read [docs/00-index.md](docs/00-index.md). It routes every question to one document. If your change contradicts a document, change the document in the same pull request or say why in the description.
-- Read [docs/01-thesis.md](docs/01-thesis.md). It states what this product is and, more usefully, what it refuses to be.
+- Read [docs/03-product/spec.md](docs/03-product/spec.md) §1 and §2. They state what this product is and, more usefully, what it refuses to be.
 
 ## Running the checks
 

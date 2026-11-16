@@ -134,7 +134,6 @@ Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs
 | Question | Document |
 |---|---|
 | Where is everything? | [docs/00-index.md](docs/00-index.md) |
-| Why does this product deserve to exist? | [docs/01-thesis.md](docs/01-thesis.md) |
 | What exactly does it do, and what is out of scope? | [docs/03-product/spec.md](docs/03-product/spec.md) |
 | What does every command, flag and exit code mean? | [docs/03-product/cli-reference.md](docs/03-product/cli-reference.md) |
 | What is planned next? | [ROADMAP.md](ROADMAP.md) |

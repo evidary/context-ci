@@ -88,6 +88,12 @@ file as both sides; a manifest or configuration that used to be accepted loosely
   README's quick start runs. A test fails when the committed manifest stops matching the
   files beside it.
 
+### Removed
+
+- The market research, the two plans, the operations page and the thesis. They were internal planning
+  documents, dated before the tool was built, and no longer described it. The specification, the CLI
+  reference and the roadmap are the documents that describe the tool.
+
 ### Not done
 
 None of the workflow has run on a GitHub-hosted runner: not the new CI jobs, not the action's
@@ -107,8 +113,8 @@ behaviour it describes. Code defects the audit found were fixed rather than docu
 ### Added
 
 - **`context-ci init`** — writes a commented `.context-ci.yaml` for the current checkout. Both
-  [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) and
-  [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md) had it in scope while a team wrote the
+  `docs/04-plan/30-day-launch.md` (since removed) and
+  `docs/04-plan/module-plan.md` (since removed) had it in scope while a team wrote the
   file by hand, and a hand-copied configuration is one typo away from a gate that looks on while
   being off. The file it writes is accepted by `check` without an edit, which
   `cmd/context-ci/init_test.go` proves by running `manifest` and then `check` against it.
@@ -139,8 +145,8 @@ behaviour it describes. Code defects the audit found were fixed rather than docu
   flags, its exit codes and the exact probe list. §8's "prompt registries" row now says why the
   feature is still deferred instead of pointing at an open question: the specification does not define
   it, and requirement C-02 forbids the network call it would make.
-- [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) and
-  [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md) no longer say `init` is unimplemented.
+- `docs/04-plan/30-day-launch.md` (since removed) and
+  `docs/04-plan/module-plan.md` (since removed) no longer say `init` is unimplemented.
 
 ---
 
@@ -227,7 +233,7 @@ recorded in [docs/03-product/spec.md](docs/03-product/spec.md) §7.
 Every `release.yml` step except Publish was run locally on this date and passed, including the five
 cross-target builds and `sha256sum -c` over all five artefacts. Publish needs the GitHub API, which
 answers 404 for a private repository. See
-[docs/06-operations/squad-and-metrics.md](docs/06-operations/squad-and-metrics.md) §4.
+`docs/06-operations/squad-and-metrics.md` (since removed) §4.
 
 ## [0.4.1] — 2026-11-13
 
@@ -416,10 +422,10 @@ a source, and the two capture SDKs. Listed in
 
 ### Added
 
-- [docs/01-thesis.md](docs/01-thesis.md) — the bet, the evidence, the buyer, the wedge, the four things that must be true, and the failure case.
-- [docs/02-market/market-and-competitors.md](docs/02-market/market-and-competitors.md) — 45 competitor dossiers in five segments, 61 sources, prices observed 29 October 2026.
+- `docs/01-thesis.md` (since removed) — the bet, the evidence, the buyer, the wedge, the four things that must be true, and the failure case.
+- `docs/02-market/market-and-competitors.md` (since removed) — 45 competitor dossiers in five segments, 61 sources, prices observed 29 October 2026.
 - [docs/03-product/spec.md](docs/03-product/spec.md) — four verbs, manifest schema v1, semantic diff classes, attribution rules, requirements, acceptance tests, pricing.
-- [docs/04-plan/30-day-launch.md](docs/04-plan/30-day-launch.md) and [docs/04-plan/module-plan.md](docs/04-plan/module-plan.md).
+- `docs/04-plan/30-day-launch.md` (since removed) and `docs/04-plan/module-plan.md` (since removed).
 - [docs/05-contracts/](docs/05-contracts/README.md) — vendored `acp-core@1.0.0` contracts with SHA-256 digests, and the rule that this product works without the platform.
 - [docs/07-decisions/adr-0001-standalone-product-repo.md](docs/07-decisions/adr-0001-standalone-product-repo.md).
 - `tools/check_docs.py` and `tools/check_vendor.py`, both enforced in CI.
