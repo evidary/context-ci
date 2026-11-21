@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Report a suspected vulnerability privately, through GitHub's private vulnerability reporting form: <https://github.com/evidary/context-ci/security/advisories/new>. Do not open a public issue.
+Report a suspected vulnerability privately, through GitHub's private vulnerability reporting form: <https://github.com/sigilary/context-ci/security/advisories/new>. Do not open a public issue.
 
 Include: what you tested, what you expected, what happened, and whether customer data or credentials could be exposed.
 

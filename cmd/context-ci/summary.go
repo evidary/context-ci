@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 // appendSummary appends a Markdown report to a file. On GitHub the file is $GITHUB_STEP_SUMMARY,

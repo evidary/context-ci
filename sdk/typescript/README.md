@@ -1,10 +1,10 @@
-# @evidary/context-ci
+# @sigilary/context-ci
 
 The TypeScript half of instrumented capture. It writes a capture file; `context-ci manifest
 --capture` turns that into an instrumented manifest.
 
 ```ts
-import { capture } from "@evidary/context-ci";
+import { capture } from "@sigilary/context-ci";
 
 capture(prompt, { template: TEMPLATE, path: "context-capture.json" });
 ```
@@ -37,7 +37,7 @@ Most applications hold a message list, not one string. `captureMessages` joins i
 provider would — `role: content`, one per line — so two callers do not each invent a different join.
 
 ```ts
-import { captureMessages } from "@evidary/context-ci";
+import { captureMessages } from "@sigilary/context-ci";
 
 captureMessages(
   [

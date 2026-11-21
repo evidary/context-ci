@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // fixture writes a working tree and returns its root and a matching config.

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 func observedFixture(t *testing.T, body string) string {

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // ParseTools reads tool definitions in any of the shapes a repository is likely to hold them in,

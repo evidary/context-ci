@@ -30,8 +30,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // Options are the inputs that are not part of the configuration file.

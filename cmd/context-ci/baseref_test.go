@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 // gitRepo turns the fixture repository into a git repository with one commit on main, and

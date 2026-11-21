@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evidary/context-ci/internal/capture"
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/diff"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/capture"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // Exit codes. See the package comment.
@@ -102,7 +102,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // version is set at build time by the release workflow. It is empty in every other build, and
 // filled in from the module version the toolchain recorded, so a binary installed with
-// `go install github.com/evidary/context-ci/cmd/context-ci@vX.Y.Z` reports that version instead of
+// `go install github.com/sigilary/context-ci/cmd/context-ci@vX.Y.Z` reports that version instead of
 // "dev". A tool that cannot say which version it is cannot be quoted in a bug report, and its SARIF
 // results carry a tool version that means nothing to a consumer that dedupes by it.
 var version = ""

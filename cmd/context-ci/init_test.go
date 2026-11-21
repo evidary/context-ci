@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/config"
 )
 
 const toolsFixture = `tools:

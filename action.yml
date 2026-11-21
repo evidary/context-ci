@@ -1,6 +1,6 @@
 name: Context CI
 description: See what a pull request changes in the prompts, tools and agent instructions an AI feature runs with, and gate it.
-author: Evidary
+author: Sigilary
 branding:
   icon: git-pull-request
   color: purple
@@ -9,14 +9,14 @@ branding:
 # binary, and a container would add a pull to every job that uses it.
 #
 # Where the binary comes from, in order:
-#   1. a release asset, when the workflow names a release (`evidary/context-ci@v1.2.3`, or the
+#   1. a release asset, when the workflow names a release (`sigilary/context-ci@v1.2.3`, or the
 #      `version` input). It is checked against the release's SHA256SUMS before it is run.
 #   2. a build of this action's own checkout, when the ref is a branch or a commit, or when no
 #      asset can be downloaded. That needs a Go toolchain, which the action installs if the runner
 #      has none.
 #
-# This file is at the repository root, so a workflow names it as `evidary/context-ci@<ref>`. There
-# is no `action/` subdirectory: `evidary/context-ci/action@<ref>` does not resolve.
+# This file is at the repository root, so a workflow names it as `sigilary/context-ci@<ref>`. There
+# is no `action/` subdirectory: `sigilary/context-ci/action@<ref>` does not resolve.
 
 inputs:
   command:
@@ -116,7 +116,7 @@ runs:
         fi
 
         asset="context-ci_${os}_${arch}${ext}"
-        base="${SERVER_URL:-https://github.com}/${ACTION_REPOSITORY:-evidary/context-ci}/releases/download/${tag}"
+        base="${SERVER_URL:-https://github.com}/${ACTION_REPOSITORY:-sigilary/context-ci}/releases/download/${tag}"
         dir="${RUNNER_TEMP}/context-ci-bin"
         mkdir -p "$dir"
         if ! curl --fail --silent --show-error --location --retry 3 -o "${dir}/${asset}" "${base}/${asset}" ||
@@ -179,7 +179,7 @@ runs:
         if [ -n "$INPUT_VERSION" ]; then
           # A version somebody named is a request for that release and no other, so it is never
           # replaced by a build of whatever this ref happens to be.
-          go install "github.com/evidary/context-ci/cmd/context-ci@${TAG}"
+          go install "github.com/sigilary/context-ci/cmd/context-ci@${TAG}"
           bin="$(go env GOBIN)"
           if [ -z "$bin" ]; then bin="$(go env GOPATH)/bin"; fi
         else

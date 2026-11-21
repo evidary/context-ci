@@ -427,7 +427,7 @@ def check_version_matches_changelog():
         )
 
 
-PIN = re.compile(r"evidary/context-ci(?:/cmd/context-ci)?@v(\d+\.\d+\.\d+)")
+PIN = re.compile(r"sigilary/context-ci(?:/cmd/context-ci)?@v(\d+\.\d+\.\d+)")
 
 
 def check_version_pins(md_files):

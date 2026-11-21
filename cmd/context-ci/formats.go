@@ -7,8 +7,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/evidary/context-ci/internal/attribute"
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/attribute"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 // sarifVersion is the schema this output targets. Pinned rather than floating: a consumer parses
@@ -81,7 +81,7 @@ func writeSARIF(w io.Writer, r *diff.Result, toolVersion string) error {
 	}{}
 	run.Tool.Driver.Name = "context-ci"
 	run.Tool.Driver.Version = toolVersion
-	run.Tool.Driver.InformationURI = "https://github.com/evidary/context-ci"
+	run.Tool.Driver.InformationURI = "https://github.com/sigilary/context-ci"
 	// Empty, not nil: a nil slice marshals as `null`, and the SARIF schema types both as arrays.
 	// A diff with no change is the common case for a gate, and it must still be a valid report.
 	run.Tool.Driver.Rules = []rule{}

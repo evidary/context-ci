@@ -1,4 +1,4 @@
-module github.com/evidary/context-ci
+module github.com/sigilary/context-ci
 
 go 1.27
 

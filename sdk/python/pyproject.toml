@@ -17,7 +17,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/evidary/context-ci"
+Homepage = "https://github.com/sigilary/context-ci"
 
 [tool.setuptools]
 # The package is one file with no dependencies. Listing it explicitly keeps the wheel honest about

@@ -31,7 +31,7 @@ const DisplayName = "Context CI"
 const Licence = "Apache-2.0"
 
 // Repository is where the source lives.
-const Repository = "https://github.com/evidary/context-ci"
+const Repository = "https://github.com/sigilary/context-ci"
 
 // HealthPath is served by `context-ci serve` and is the value this manifest declares.
 const HealthPath = "/healthz"

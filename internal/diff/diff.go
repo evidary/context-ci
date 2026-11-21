@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // Class names one kind of change. These strings are configuration keys, so they

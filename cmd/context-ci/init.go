@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/evidary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/config"
 )
 
 // defaultPrompt is the path written, commented out, when the checkout holds no file the probe

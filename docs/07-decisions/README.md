@@ -21,7 +21,7 @@ Cheap to reverse, so they are recorded here rather than given an ADR each.
 | # | Decision | Answer | Date | Why |
 |---|---|---|---|---|
 | D-03 | Primary machine-readable output | Both, and neither is primary: `sarif` for code scanning, `junit` for XML-only dashboards, `github` still the action's default | 13 Nov 2026 | A team that already runs code scanning should not be asked to add a second report format. See [cli-reference](../03-product/cli-reference.md) §7 |
-| D-05 | Namespace for the GitHub Action | `evidary/context-ci` — `action.yml` is at the repository root, so a workflow writes `uses: evidary/context-ci@<tag>` | 13 Nov 2026, corrected 16 Nov 2026 | The repository already lives under the `evidary` org; a second org is another namespace to own and another place to forget to update. The answer first recorded here was `evidary/context-ci/action`, which names a subdirectory that has never existed and so could not resolve; the documents were changed to match the file rather than the file moved, because a root action is the shorter name and needs no second copy of `action.yml` |
+| D-05 | Namespace for the GitHub Action | `sigilary/context-ci` — `action.yml` is at the repository root, so a workflow writes `uses: sigilary/context-ci@<tag>` | 13 Nov 2026, corrected 16 Nov 2026 | The repository already lives under the `sigilary` org; a second org is another namespace to own and another place to forget to update. The answer first recorded here was `sigilary/context-ci/action`, which names a subdirectory that has never existed and so could not resolve; the documents were changed to match the file rather than the file moved, because a root action is the shorter name and needs no second copy of `action.yml` |
 
 ## Open decisions
 

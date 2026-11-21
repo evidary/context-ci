@@ -243,12 +243,12 @@ Rules:
 ## 7. CI integration
 
 GitHub Actions, through the wrapper in [`action.yml`](../../action.yml), which is at the repository
-root and is therefore named `evidary/context-ci@<ref>`:
+root and is therefore named `sigilary/context-ci@<ref>`:
 
 ```yaml
 - uses: actions/checkout@v4
   with: { fetch-depth: 0 }      # the baseline is built from the base branch, so it has to be there
-- uses: evidary/context-ci@v0.9.0
+- uses: sigilary/context-ci@v0.9.0
   with:
     acknowledge: ${{ contains(github.event.pull_request.labels.*.name, 'context-change-approved') && 'all' || '' }}
 ```
@@ -272,7 +272,7 @@ context-ci:
     GOBIN: $CI_PROJECT_DIR/bin
     GIT_DEPTH: 0                # the merge base has to be in the clone
   script:
-    - go install github.com/evidary/context-ci/cmd/context-ci@v0.9.0
+    - go install github.com/sigilary/context-ci/cmd/context-ci@v0.9.0
     # The refspec is explicit because a CI clone is usually single-branch, and `git fetch origin
     # main` then leaves no origin/main behind, only FETCH_HEAD.
     - git fetch origin "+refs/heads/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:refs/remotes/origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
@@ -295,7 +295,7 @@ jobs:
       - checkout
       - run:
           name: Install context-ci
-          command: go install github.com/evidary/context-ci/cmd/context-ci@v0.9.0
+          command: go install github.com/sigilary/context-ci/cmd/context-ci@v0.9.0
       - run:
           name: Gate
           command: |

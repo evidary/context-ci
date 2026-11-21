@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/evidary/context-ci/internal/attribute"
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/attribute"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 // attributeCommand implements the attribute verb: given two manifests and two eval runs, list the

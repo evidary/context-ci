@@ -5,7 +5,7 @@
  * retrieval and templating. This SDK records it, at the point where the request is assembled, into
  * a capture file that `context-ci manifest --capture` turns into an instrumented manifest.
  *
- *     import { capture } from "@evidary/context-ci";
+ *     import { capture } from "@sigilary/context-ci";
  *
  *     capture(prompt, { template: TEMPLATE, path: "context-capture.json" });
  *

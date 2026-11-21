@@ -50,13 +50,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }      # the baseline is built from the base branch
-      - uses: evidary/context-ci@v0.9.0
+      - uses: sigilary/context-ci@v0.9.0
         with:
           # A reviewer accepts a deliberate fail-class change by applying this label.
           acknowledge: ${{ contains(github.event.pull_request.labels.*.name, 'context-change-approved') && 'all' || '' }}
 ```
 
-`action.yml` is at the repository root, so the action is `evidary/context-ci@<ref>`; there is no
+`action.yml` is at the repository root, so the action is `sigilary/context-ci@<ref>`; there is no
 `action/` subdirectory. Its inputs:
 
 | Input | Default | Meaning |
@@ -702,7 +702,7 @@ In a workflow, run the verb as its own step rather than capturing its output, be
 are read from the step's log:
 
 ```yaml
-- uses: evidary/context-ci@v0.9.0
+- uses: sigilary/context-ci@v0.9.0
   with:
     command: attribute
     baseline: context-manifest.base.json

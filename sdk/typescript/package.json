@@ -1,5 +1,5 @@
 {
-  "name": "@evidary/context-ci",
+  "name": "@sigilary/context-ci",
   "version": "0.1.0",
   "description": "Capture the prompt your application actually sends, for context-ci instrumented manifests.",
   "license": "Apache-2.0",

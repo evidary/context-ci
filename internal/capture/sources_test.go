@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 var fixedTime = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)

@@ -18,8 +18,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/evidary/context-ci/internal/diff"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // Version is the configuration schema version this package accepts.

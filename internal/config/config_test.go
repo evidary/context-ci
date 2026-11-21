@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 const minimal = `

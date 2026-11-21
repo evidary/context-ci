@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/evidary/context-ci/internal/modulemanifest"
+	"github.com/sigilary/context-ci/internal/modulemanifest"
 )
 
 // runModuleManifest prints this module's module-manifest.v1.json.

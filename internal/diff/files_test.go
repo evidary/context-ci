@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 func withFiles(files ...manifest.File) *manifest.Manifest {

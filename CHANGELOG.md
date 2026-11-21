@@ -6,6 +6,13 @@ All notable changes to Context CI. Format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
+**Renamed to Sigilary.** The company changed name on 21 November 2026; the earlier name belongs to
+someone else. This document uses the new name throughout, including in entries written before the
+change. What a user has to change:
+
+- the action is `sigilary/context-ci@<tag>`, and the Go module is `github.com/sigilary/context-ci`;
+- the TypeScript SDK is `@sigilary/context-ci`. It was not published under the old name.
+
 ## [0.9.0] — 2026-11-16
 
 **The check no longer needs anything committed, and it says what changed.** A review of 0.8 against
@@ -126,9 +133,9 @@ file as both sides; a manifest or configuration that used to be accepted loosely
   file as both sides with exit 2, however the two paths are spelled. The action passes no head to
   `check` and its `head` input defaults to empty. `TestCheckGatesAnEditMadeAfterTheBaseline` writes a
   baseline, edits the prompt and requires exit 1.
-- **`uses: evidary/context-ci/action@v0.6.0` could not resolve.** `action.yml` is at the repository
+- **`uses: sigilary/context-ci/action@v0.6.0` could not resolve.** `action.yml` is at the repository
   root and there has never been an `action/` directory. The documents now say
-  `evidary/context-ci@v0.8.0`, decision D-05 records the correction, and the README's workflow is a
+  `sigilary/context-ci@v0.8.0`, decision D-05 records the correction, and the README's workflow is a
   whole one: a checkout with history, a Go toolchain, the baseline read from the base branch, then
   the action. The action installs Go itself when the runner has none.
 - **A flag after a positional was not parsed.** `context-ci diff a.json b.json --format sarif` — the
@@ -339,7 +346,7 @@ answers 404 for a private repository. See
 
 ### Fixed
 
-- **An installed binary reported `dev`.** `go install github.com/evidary/context-ci/cmd/context-ci@v0.4.0`
+- **An installed binary reported `dev`.** `go install github.com/sigilary/context-ci/cmd/context-ci@v0.4.0`
   — the command in the action, the README and both CI snippets — builds without the release
   workflow's ldflags, so `context-ci version` printed `dev` and SARIF's `tool.driver.version` was
   `dev` for every user who installed it the documented way. The version now falls back to the module
@@ -373,7 +380,7 @@ is a visibility decision, not a code defect, and it is recorded with a date in
 - Both formats were validated against their published schemas on the day of release — SARIF 2.1.0
   against the OASIS schema, JUnit against the Jenkins `junit-10.xsd` — using a diff containing one
   `fail`, one `warn` and one `ignore` entry.
-- **The TypeScript capture SDK** (`sdk/typescript`, `@evidary/context-ci`): no runtime
+- **The TypeScript capture SDK** (`sdk/typescript`, `@sigilary/context-ci`): no runtime
   dependencies, the same five-field capture format as the Python SDK, and `captureMessages()` for
   callers holding a message list rather than one string. A test runs `context-ci manifest --capture`
   against a real capture and pins `rendered_hash` to the SHA-256 of the exact text the application
@@ -445,7 +452,7 @@ looking complete.
 
 ### Added
 
-- **`action.yml`**: a composite GitHub Action, so `uses: evidary/context-ci/action@v0.1.0` runs the
+- **`action.yml`**: a composite GitHub Action, so `uses: sigilary/context-ci/action@v0.1.0` runs the
   binary built from the same tag as the action. It installs with `go install` rather than
   downloading an asset, so there is nothing between the tag and the binary a user can check
   against. `check` without a baseline fails: a gate that passes because it had nothing to compare

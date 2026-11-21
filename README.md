@@ -7,7 +7,7 @@ A prompt, a tool description, an `AGENTS.md`, an MCP server list: these files ch
 It is one binary. It runs in your CI with no account, no key and no network call, and it never calls a model.
 
 **Status:** v0.9.0 in [`VERSION`](VERSION). **Pre-release:** the repository is public and the announcement is planned for 16 December 2026; until then expect breaking changes. Its own CI, including the action on Linux, macOS and Windows, runs on GitHub-hosted runners; [spec.md](docs/03-product/spec.md) §7 records what has been exercised and what has not.
-**Licence:** Apache-2.0 · **Maintained by:** Evidary.
+**Licence:** Apache-2.0 · **Maintained by:** Sigilary.
 
 ---
 
@@ -41,8 +41,8 @@ Context CI compares what is **in the repository**. It does not watch your applic
 **See it work, in a minute.** [`examples/minimal`](examples/minimal) is one prompt and one configuration:
 
 ```bash
-go install github.com/evidary/context-ci/cmd/context-ci@v0.9.0
-git clone https://github.com/evidary/context-ci && cd context-ci
+go install github.com/sigilary/context-ci/cmd/context-ci@v0.9.0
+git clone https://github.com/sigilary/context-ci && cd context-ci
 
 context-ci check --root examples/minimal --base-ref HEAD
 # no change in context                                      -> exit 0
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0            # the baseline is built from the base branch
-      - uses: evidary/context-ci@v0.9.0
+      - uses: sigilary/context-ci@v0.9.0
         with:
           # A reviewer accepts a deliberate change by applying this label.
           acknowledge: ${{ contains(github.event.pull_request.labels.*.name, 'context-change-approved') && 'all' || '' }}
@@ -134,7 +134,7 @@ Output is text, GitHub annotations, JSON, SARIF or JUnit. The capture SDKs for [
 
 ## Why it is a separate repository
 
-Context CI is Apache-2.0, useful with no platform account, and released by itself. Evidary also builds a platform for recording what AI agents do (`acp-core`); connecting the two is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
+Context CI is Apache-2.0, useful with no platform account, and released by itself. Sigilary also builds a platform for recording what AI agents do (`acp-core`); connecting the two is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
 
 Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs/07-decisions/adr-0001-standalone-product-repo.md).
 

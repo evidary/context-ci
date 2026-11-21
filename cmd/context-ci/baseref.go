@@ -13,10 +13,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/evidary/context-ci/internal/capture"
-	"github.com/evidary/context-ci/internal/config"
-	"github.com/evidary/context-ci/internal/diff"
-	"github.com/evidary/context-ci/internal/manifest"
+	"github.com/sigilary/context-ci/internal/capture"
+	"github.com/sigilary/context-ci/internal/config"
+	"github.com/sigilary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/manifest"
 )
 
 // resolveBase turns --base-ref into the commit the baseline is built from: the merge base of the

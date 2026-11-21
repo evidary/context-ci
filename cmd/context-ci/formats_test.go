@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evidary/context-ci/internal/attribute"
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/attribute"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 func sampleResult() *diff.Result {

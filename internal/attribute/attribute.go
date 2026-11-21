@@ -22,7 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/evidary/context-ci/internal/diff"
+	"github.com/sigilary/context-ci/internal/diff"
 )
 
 // Version is the eval results schema version this package accepts.
