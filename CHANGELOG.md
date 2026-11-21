@@ -13,6 +13,10 @@ change. What a user has to change:
 - the action is `sigilary/context-ci@<tag>`, and the Go module is `github.com/sigilary/context-ci`;
 - the TypeScript SDK is `@sigilary/context-ci`. It was not published under the old name.
 
+The platform repository this tool can optionally report to is now called `ledger`, and its contract set
+was republished as 1.2.1 with every schema `$id` moved under that name. The two contracts vendored here
+are re-vendored at 1.2.1; they differ from the earlier copies in their `$id` and nothing else.
+
 ## [0.9.0] — 2026-11-16
 
 **The check no longer needs anything committed, and it says what changed.** A review of 0.8 against
@@ -533,7 +537,7 @@ a source, and the two capture SDKs. Listed in
 - `docs/02-market/market-and-competitors.md` (since removed) — 45 competitor dossiers in five segments, 61 sources, prices observed 29 October 2026.
 - [docs/03-product/spec.md](docs/03-product/spec.md) — four verbs, manifest schema v1, semantic diff classes, attribution rules, requirements, acceptance tests, pricing.
 - `docs/04-plan/30-day-launch.md` (since removed) and `docs/04-plan/module-plan.md` (since removed).
-- [docs/05-contracts/](docs/05-contracts/README.md) — vendored `acp-core@1.0.0` contracts with SHA-256 digests, and the rule that this product works without the platform.
+- [docs/05-contracts/](docs/05-contracts/README.md) — vendored `ledger@1.0.0` contracts with SHA-256 digests, and the rule that this product works without the platform.
 - [docs/07-decisions/adr-0001-standalone-product-repo.md](docs/07-decisions/adr-0001-standalone-product-repo.md).
 - `tools/check_docs.py` and `tools/check_vendor.py`, both enforced in CI.
 

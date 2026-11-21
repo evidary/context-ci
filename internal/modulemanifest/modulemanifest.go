@@ -1,4 +1,4 @@
-// Package modulemanifest emits acp-core `module-manifest.v1.json`: what a platform needs in order to discover this
+// Package modulemanifest emits ledger `module-manifest.v1.json`: what a platform needs in order to discover this
 // module, check its health and know which contracts it speaks.
 //
 // The contract requires `health_path`, and it requires it for a good reason — a platform probes
@@ -136,5 +136,5 @@ func VendoredNames(vendorDir string) ([]string, error) {
 
 // VendorDir is where this repository keeps its vendored contracts.
 func VendorDir(root string) string {
-	return filepath.Join(root, "docs", "05-contracts", "vendor", "acp-core@1.0.2")
+	return filepath.Join(root, "docs", "05-contracts", "vendor", "ledger@1.2.1")
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that vendored acp-core contracts match the digests in VENDORED.md.
+"""Verify that vendored ledger contracts match the digests in VENDORED.md.
 
 A vendored contract must never be edited in place. If a digest does not match,
 either the upstream contract changed and this repo must re-vendor, or somebody

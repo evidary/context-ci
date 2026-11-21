@@ -134,7 +134,7 @@ Output is text, GitHub annotations, JSON, SARIF or JUnit. The capture SDKs for [
 
 ## Why it is a separate repository
 
-Context CI is Apache-2.0, useful with no platform account, and released by itself. Sigilary also builds a platform for recording what AI agents do (`acp-core`); connecting the two is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
+Context CI is Apache-2.0, useful with no platform account, and released by itself. Sigilary also builds a platform for recording what AI agents do (`ledger`); connecting the two is optional and described in [docs/05-contracts/README.md](docs/05-contracts/README.md).
 
 Read the reasoning: [docs/07-decisions/adr-0001-standalone-product-repo.md](docs/07-decisions/adr-0001-standalone-product-repo.md).
 

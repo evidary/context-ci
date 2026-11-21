@@ -20,7 +20,7 @@ Constraints that actually bear on the choice:
 4. **Distribution inside CI must not need a toolchain install.** A CI image that
    needs a Python venv and a resolver adds minutes and a failure mode.
 5. Five repositories, one company, no capital. The team is strongest in Go and
-   already runs a Go 1.27 toolchain for `acp-core`.
+   already runs a Go 1.27 toolchain for `ledger`.
 6. The capture path needs an SDK call (`context_ci.capture(...)` in Python) inside the customer's application, and
    those applications are Python or TypeScript.
 
@@ -36,7 +36,7 @@ libraries that write the capture file the CLI turns into a manifest.
 - Determinism is the load-bearing property, and Go makes it one test with three
   operating systems in CI rather than three runtime versions to pin.
 - The manifest is a digest computation over files. That is the same shape of work
-  as `acp-core`'s integrity core, so the team's existing knowledge transfers even
+  as `ledger`'s integrity core, so the team's existing knowledge transfers even
   though the code is not shared.
 - Constraint 6 is a real argument for Python, and it is satisfied by the SDKs.
   Users who never touch Go still never touch Go.
@@ -60,11 +60,11 @@ libraries that write the capture file the CLI turns into a manifest.
   in step. The cross-implementation check this decision did plan exists only for the
   digest, in `tools/interop/reference_digest.py`, which recomputes the pinned value
   independently of the Go code.
-- The CLI may take third-party Go dependencies. `acp-core`'s zero-dependency rule
+- The CLI may take third-party Go dependencies. `ledger`'s zero-dependency rule
   exists because a verifier must run on a hostile host with no supply chain; a CI
   tool has no such constraint, and hand-rolling a YAML parser would be worse than
   depending on one.
-- The CLI must never import `acp-core` code. Integration is over the vendored
+- The CLI must never import `ledger` code. Integration is over the vendored
   contracts in `docs/05-contracts/vendor/`, as ADR-0001 requires.
 
 ## Reversibility

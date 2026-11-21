@@ -30,8 +30,8 @@
 |---|---|---|
 | [03-product/spec.md](03-product/spec.md) | Scope, non-goals, the manifest schema, CLI surface, CI integration, requirements, acceptance tests, pricing | Current |
 | [03-product/cli-reference.md](03-product/cli-reference.md) | The implemented verbs, every flag, the exit-code contract, the full configuration schema and the rules that are enforced rather than documented | Current |
-| [05-contracts/README.md](05-contracts/README.md) | What we consume from `acp-core`, what we publish, and the vendoring rule | Current |
-| [05-contracts/vendor/acp-core@1.0.2/VENDORED.md](05-contracts/vendor/acp-core@1.0.2/VENDORED.md) | Pinned contract copies with SHA-256 digests | Pinned 1.0.2 |
+| [05-contracts/README.md](05-contracts/README.md) | What we consume from `ledger`, what we publish, and the vendoring rule | Current |
+| [05-contracts/vendor/ledger@1.2.1/VENDORED.md](05-contracts/vendor/ledger@1.2.1/VENDORED.md) | Pinned contract copies with SHA-256 digests | Pinned 1.2.1 |
 | [07-decisions/README.md](07-decisions/README.md) | Decision register | Current |
 | [07-decisions/adr-0001-standalone-product-repo.md](07-decisions/adr-0001-standalone-product-repo.md) | Why this is its own repository and its own licence, and what it may never depend on | Current |
 | [07-decisions/adr-0002-implementation-language.md](07-decisions/adr-0002-implementation-language.md) | Go for the CLI, Python and TypeScript for the capture SDKs, and why the split buys more than one language everywhere | Current |
@@ -44,7 +44,7 @@
 | Not here | Where it is | Why |
 |---|---|---|
 | Market research, business plans and staffing | Not in this repository | Not needed to use or build this tool |
-| The platform's contracts in full | vendored copies in [05-contracts/vendor/](05-contracts/vendor/acp-core@1.0.2/VENDORED.md) | We pin what we consume; we do not carry the whole contract set |
+| The platform's contracts in full | vendored copies in [05-contracts/vendor/](05-contracts/vendor/ledger@1.2.1/VENDORED.md) | We pin what we consume; we do not carry the whole contract set |
 | Other modules' plans | their own repositories | Separate products, separate buyers |
 | Cross-group research archive | not in any repo | Portfolio context, not build context |
 

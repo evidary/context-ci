@@ -19,7 +19,7 @@ That arrangement fails this product specifically, for reasons that do not apply 
 
 1. **Context CI lives in its own repository** with its own versioning, changelog, CODEOWNERS, CI and release cadence.
 2. **Licence is Apache-2.0.** The whole tool. Not open-core with a closed folder — the free tool is the complete check.
-3. **No dependency on `acp-core`.** The platform integration is optional and one-directional: the tool emits a manifest digest that a platform may reference. Nothing is required.
+3. **No dependency on `ledger`.** The platform integration is optional and one-directional: the tool emits a manifest digest that a platform may reference. Nothing is required.
 4. **The paid boundary is hosted history and cross-repository attribution**, which a single developer does not need. It is not a feature withheld from the free tool.
 5. **The product must build and pass its full test suite with no platform present.** CI runs with no platform present, so a dependency on it would fail the build.
 6. This repository keeps a **pinned copy** of the two platform contracts it may optionally use, with checksums, so it can be built and released without network access to the platform.
